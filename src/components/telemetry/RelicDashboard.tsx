@@ -413,10 +413,7 @@ export default function RelicDashboard() {
                 />
 
                 {/* Right: Codecs translator */}
-                <CodexTerminal
-                  hopLog={result?.packet.hop_log ?? []}
-                  payload={payload}
-                />
+                <CodexTerminal hopLog={result?.packet.hop_log ?? []} />
               </div>
             </main>
           </div>

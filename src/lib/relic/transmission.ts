@@ -71,8 +71,14 @@ export function transmit(
 
   // Walk the void hops, actually running the codec pipeline so the result is a
   // genuine proof of integrity rather than an assumption. The internal ASCII at
-  // each planet is captured for the hop_log.
+  // each planet is captured for the hop_log, along with the next-hop encoding
+  // (codex digits and the binary stream) that actually crosses the void.
   const asciiByPlanet: number[][] = [codec.toAscii(payload)];
+  const outgoingByPlanet: Array<{
+    base: number;
+    digits: string[];
+    stream: string;
+  } | null> = [];
   for (let i = 0; i < route.hops.length; i += 1) {
     const nextCodex = universe.nodesById.get(route.path[i + 1])!.codex;
     const incomingAscii = asciiByPlanet[i];
@@ -82,6 +88,7 @@ export function transmit(
     const received = codec.deserializeFromBinary(stream, nextCodex);
     const decodedAscii = codec.decodeFromCodex(received);
 
+    outgoingByPlanet.push({ base: nextCodex, digits: encoded.digits, stream });
     asciiByPlanet.push(decodedAscii);
   }
 
@@ -104,6 +111,8 @@ export function transmit(
       cumulative += voidLatencyMs;
     }
 
+    const outgoing = i < outgoingByPlanet.length ? outgoingByPlanet[i] : null;
+
     hop_log.push({
       sequence: i,
       planet_id: step.planet_id,
@@ -114,6 +123,11 @@ export function transmit(
       segments: step.internal.segments,
       payload_ascii: planetAscii,
       payload_dialect: { base: planet.codex, digits: dialect.digits },
+      next_hop_codex: outgoing ? outgoing.base : undefined,
+      next_hop_dialect: outgoing
+        ? { base: outgoing.base, digits: outgoing.digits }
+        : undefined,
+      binary_stream: outgoing ? outgoing.stream : undefined,
       internal_latency_ms: step.internal.total_ms,
       void_latency_ms: voidLatencyMs,
       next_hop_id: hop ? hop.to : undefined,
