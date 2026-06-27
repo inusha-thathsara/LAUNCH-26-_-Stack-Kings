@@ -423,8 +423,8 @@ export default function SpaceMap({
               const isDestination = destination === node.id;
               const isInRoute = route?.path.includes(node.id) ?? false;
 
-              // Compute atmosphere thickness visually
-              const atmosWidth = Math.max(5, node.atmosphere_thickness_km * 0.03);
+              // Compute atmosphere thickness visually (proportional scale)
+              const atmosWidth = 3 + Math.sqrt(node.atmosphere_thickness_km) * 0.4;
 
               return (
                 <g
@@ -434,24 +434,34 @@ export default function SpaceMap({
                   onMouseLeave={() => setHoveredPlanet(null)}
                   onClick={() => onToggleNode(node.id)}
                 >
-                  {/* 3a. Atmosphere / Glow */}
+                  {/* 3a. Atmosphere / Glow Envelope */}
                   <circle
                     cx={sx}
                     cy={sy}
                     r={vr + atmosWidth}
-                    fill="none"
+                    fill={
+                      isDead
+                        ? "rgba(239, 68, 68, 0.03)"
+                        : isOrigin
+                        ? "rgba(59, 130, 246, 0.08)"
+                        : isDestination
+                        ? "rgba(168, 85, 247, 0.08)"
+                        : isInRoute
+                        ? "rgba(16, 185, 129, 0.08)"
+                        : "rgba(255, 255, 255, 0.02)"
+                    }
                     stroke={
                       isDead
-                        ? "rgba(239, 68, 68, 0.1)"
+                        ? "rgba(239, 68, 68, 0.15)"
                         : isOrigin
-                        ? "rgba(59, 130, 246, 0.25)"
+                        ? "rgba(59, 130, 246, 0.2)"
                         : isDestination
-                        ? "rgba(168, 85, 247, 0.25)"
+                        ? "rgba(168, 85, 247, 0.2)"
                         : isInRoute
-                        ? "rgba(16, 185, 129, 0.25)"
-                        : "rgba(255, 255, 255, 0.04)"
+                        ? "rgba(16, 185, 129, 0.2)"
+                        : "rgba(255, 255, 255, 0.06)"
                     }
-                    strokeWidth="2.5"
+                    strokeWidth="1.2"
                     className="transition-all duration-300"
                   />
 
