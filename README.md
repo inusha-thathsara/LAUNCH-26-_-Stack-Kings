@@ -7,7 +7,8 @@ each planet's numerical dialect (codex), finds the lowest-latency route under a
 maximum void-hop constraint, and dynamically reroutes around node/link failures.
 
 Built with Next.js (App Router) + TypeScript. The protocol engine is headless and
-fully unit-tested; a browser console and a CLI expose it for the demo milestones.
+fully unit-tested; an interactive telemetry dashboard and a CLI expose it for the
+demo milestones.
 
 ---
 
@@ -18,7 +19,7 @@ npm install
 npm run dev
 ```
 
-- Browser console: open [http://localhost:3000/relic](http://localhost:3000/relic)
+- Telemetry dashboard: open [http://localhost:3000/relic](http://localhost:3000/relic)
 - Terminal demo (M1-M4): `npm run relic`
 - Tests: `npm test`
 - Production build: `npm run build && npm start`
@@ -36,19 +37,22 @@ Then open [http://localhost:3000/relic](http://localhost:3000/relic).
 
 ## What this implements (scope)
 
-This repository is one member's portion of a three-person team project. The two
-teammate-owned modules are isolated behind TypeScript interfaces in
-[`src/lib/relic/contracts.ts`](src/lib/relic/contracts.ts) and backed by functional
-stubs so the engine runs end-to-end today:
+This started as one member's portion of a three-person team project. The two
+teammate-facing modules are isolated behind TypeScript interfaces in
+[`src/lib/relic/contracts.ts`](src/lib/relic/contracts.ts):
 
 - **Mapping** (`GeometryProvider`) — tower placement, center/void distances, the
-  line-of-sight closest tower pair, ring segment counts, and the visual map UI.
-- **Encoding/Decoding** (`Codec`) — codex base conversion, ASCII representation,
-  and binary stream serialization.
+  line-of-sight closest tower pair, and ring segment counts. Backed by a complete,
+  correct provider in [`src/lib/relic/stubs/geometry.stub.ts`](src/lib/relic/stubs/geometry.stub.ts);
+  the interactive map UI lives in [`src/components/telemetry/`](src/components/telemetry).
+- **Encoding/Decoding** (`Codec`) — codex base conversion, ASCII representation, and
+  binary-stream serialization. Implemented in
+  [`src/lib/relic/codec.ts`](src/lib/relic/codec.ts) (`RelicCodec`): the void stream
+  serializes the **next-hop codex digits** (not raw ASCII), matching the protocol flow.
 
 Everything else is implemented here: config parsing, the latency engine, routing,
 resilience, the packet/`hop_log` orchestration, and the runnable surfaces (API,
-console, CLI). See [Team integration](#team-integration--merge-checklist).
+dashboard, CLI). See [Team integration](#team-integration--merge-checklist).
 
 ---
 
@@ -91,8 +95,21 @@ Raw payload -> next-hop codex -> binary stream -> void -> destination codex
 Each planet receives data already encoded in **its own** codex (the previous
 planet encodes into the next hop's dialect before transmitting), so the `hop_log`
 records every planet's payload in its own dialect — proving the chain of
-conversions. The codec round-trip is actually executed per hop, so the delivered
-payload is a genuine reconstruction, not an assumption.
+conversions. Each non-final `hop_log` entry also carries `next_hop_codex`,
+`next_hop_dialect`, and the serialized `binary_stream` that actually crosses the
+void, so the encoding translation at every hop is fully visible (M2). The codec
+round-trip is actually executed per hop, so the delivered payload is a genuine
+reconstruction, not an assumption.
+
+### Telemetry dashboard (`/relic`)
+
+The dashboard ([`src/components/telemetry/`](src/components/telemetry)) is the main
+demo surface: an interactive `SpaceMap` (click planets to set origin/destination,
+click planets/links to fail them), latency gauges (M3), and a Codex Terminal that
+shows the per-hop local dialect, the next-hop conversion, and the binary stream
+(M2). One-click scenario presets (Baseline, Hyper-Flare, Distortion, Blackout,
+Chaos) inject failures for the M4 resilience demo; their targets are derived from
+the loaded universe, not hardcoded.
 
 ### Latency model
 
@@ -168,20 +185,24 @@ src/
     types.ts          # domain model + mandatory packet/hop_log schema
     contracts.ts      # GeometryProvider + Codec interfaces (teammate modules)
     config.ts         # dynamic config parser + validator (metadata defaults)
+    codec.ts          # RelicCodec: codex <-> ASCII + reversible binary stream
     latency.ts        # Tv, Tp, and route component breakdown
     graph.ts          # network graph (L <= Lmax edges)
     router.ts         # state-expanded Dijkstra (lowest-latency routing)
     transmission.ts   # packet lifecycle + hop_log orchestration
     resilience.ts     # kill/revive nodes & links, dynamic rerouting
     engine.ts         # composition root (teammate swap point)
-    stubs/            # functional stand-ins for the teammate modules
+    stubs/            # functional geometry provider + reference stub codec
     server/universe.ts# Node-only config loader (cached engine)
+  components/telemetry/ # SpaceMap, LatencyMetrics, CodexTerminal, RelicDashboard
   app/
-    relic/page.tsx    # browser console (minimal demo harness)
+    relic/page.tsx    # telemetry dashboard mount
     api/universe      # GET  /api/universe  (M1)
     api/transmit      # POST /api/transmit  (M2/M3/M4)
   cli/relic.ts        # terminal demo (M1-M4)
 universe-config.json  # the Zeta-26 universe (parsed dynamically)
+Equations.md          # reference: the challenge latency equations
+Launch26.md           # reference: the challenge brief
 ```
 
 ---
@@ -191,29 +212,29 @@ universe-config.json  # the Zeta-26 universe (parsed dynamically)
 | Milestone | Where to see it |
 | --- | --- |
 | M1 — Universe initialization | `npm run relic -- init`, or `GET /api/universe`, or load `/relic` |
-| M2 — Multi-hop proof (dialect translations) | `/relic` hop_log table, or `npm run relic` |
-| M3 — Latency breakdown (fiber/tower/atmosphere/void) | `/relic` breakdown cards, or CLI output |
-| M4 — Chaos test (kill node/link, reroute) | `/relic` "kill planets / sever links", or `npm run relic` |
+| M2 — Multi-hop proof (dialect translations) | `/relic` Codex Terminal (local + next-hop dialect + binary stream), or `npm run relic` |
+| M3 — Latency breakdown (fiber/tower/atmosphere/void) | `/relic` latency gauges, or CLI output |
+| M4 — Chaos test (kill node/link, reroute) | `/relic` scenario presets / click a planet or link, or `npm run relic` |
 
 ---
 
 ## Team integration / merge checklist
 
-Teammate modules plug in at the single composition root,
+Modules plug in at the single composition root,
 [`src/lib/relic/engine.ts`](src/lib/relic/engine.ts):
 
-1. **Mapping** — provide an implementation of `GeometryProvider`
-   ([`contracts.ts`](src/lib/relic/contracts.ts)) and replace
-   `createStubGeometryProvider(...)` in `createEngine`.
-2. **Encoding/Decoding** — provide an implementation of `Codec` and replace
-   `createStubCodec()` in `createEngine`.
-3. Run `npm test` — the latency, routing, transmission, and `hop_log` suites act as
-   integration tests against the real modules (including the "Hello world" base-5 /
-   base-14 proof and payload-integrity checks).
-4. The mapping teammate's **visual map UI** consumes `GET /api/universe` and
-   `POST /api/transmit`; no engine changes are needed to integrate it.
+1. **Encoding/Decoding** — done: `createRelicCodec()`
+   ([`codec.ts`](src/lib/relic/codec.ts)) is wired in. To substitute a different
+   `Codec`, swap that one line.
+2. **Mapping** — `createStubGeometryProvider(...)` is a complete, correct
+   `GeometryProvider`. If a dedicated mapping module is provided, replace that line.
+3. Run `npm test` — the codec, latency, routing, transmission, and `hop_log` suites
+   act as integration tests (including the "Hello world" base-5 / base-14 proof and
+   payload-integrity checks).
+4. The **telemetry dashboard** consumes `GET /api/universe` and `POST /api/transmit`;
+   no engine changes are needed to integrate it.
 
-No other file needs to change to merge teammate work.
+No other file needs to change to swap a module.
 
 ---
 
