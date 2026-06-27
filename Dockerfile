@@ -21,11 +21,13 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
 # Next.js standalone server output plus static assets.
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder --chown=node:node /app/public ./public
+COPY --from=builder --chown=node:node /app/.next/standalone ./
+COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 # The protocol parses this at runtime from the working directory.
-COPY --from=builder /app/universe-config.json ./universe-config.json
+COPY --from=builder --chown=node:node /app/universe-config.json ./universe-config.json
+
+USER node
 
 EXPOSE 3000
 CMD ["node", "server.js"]
