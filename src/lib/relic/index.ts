@@ -3,5 +3,6 @@
 export * from "./types";
 export * from "./contracts";
 export * from "./config";
+export * from "./latency";
 export { createStubGeometryProvider, StubGeometryProvider } from "./stubs/geometry.stub";
 export { createStubCodec, StubCodec } from "./stubs/codec.stub";
