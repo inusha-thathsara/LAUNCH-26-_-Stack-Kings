@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { PlanetNode, UniverseMetadata } from "@/lib/relic/types";
 import type { VoidEdge } from "@/lib/relic/graph";
 import type { TransmissionResult } from "@/lib/relic/transmission";
@@ -83,46 +83,60 @@ export default function RelicDashboard() {
     setSendError(null);
   }
 
-  // Pre-configured Scenarios
+  // Pre-configured scenarios. Planet/link targets are derived from the loaded
+  // universe (never hardcoded) so they survive config changes.
   function applyScenario(scenario: string) {
     resetChaos();
     if (!universe) return;
+
+    const planets = universe.nodes.map((n) => n.id);
+    // Interior planets exclude the first/last (the default origin/destination),
+    // so a scenario doesn't trivially black out the endpoints.
+    const interior = planets.slice(1, -1);
 
     switch (scenario) {
       case "baseline":
         // All clear
         break;
       case "hyperflare":
-        // Sever direct links Aegis-Boreas and Dawn-Elysium
-        setDeadLinks(new Set([linkKey("Aegis", "Boreas"), linkKey("Dawn", "Elysium")]));
+        // Solar flare severs the first couple of reachable void links.
+        setDeadLinks(
+          new Set(reachableEdges.slice(0, 2).map((e) => linkKey(e.from, e.to))),
+        );
         break;
-      case "distortion":
-        // Dawn planet atmosphere goes hyper-refractive, routing goes down (planet offline)
-        setDeadNodes(new Set(["Dawn"]));
+      case "distortion": {
+        // A single interior planet's atmosphere goes hyper-refractive (offline).
+        const victim = interior[0] ?? planets[0];
+        if (victim) setDeadNodes(new Set([victim]));
         break;
-      case "blackout":
-        // Elysium & Dawn go completely offline
-        setDeadNodes(new Set(["Elysium", "Dawn"]));
+      }
+      case "blackout": {
+        // Two interior planets go completely offline.
+        const victims = interior.length >= 2 ? interior.slice(0, 2) : interior;
+        if (victims.length > 0) setDeadNodes(new Set(victims));
         break;
-      case "chaos":
-        // Randomly sever 2-3 links and kill 1 planet
-        if (universe.nodes.length > 2) {
-          const randomPlanet = universe.nodes[Math.floor(Math.random() * (universe.nodes.length - 2)) + 1].id;
+      }
+      case "chaos": {
+        // Randomly take one interior planet and up to two links down.
+        if (interior.length > 0) {
+          const randomPlanet =
+            interior[Math.floor(Math.random() * interior.length)];
           setDeadNodes(new Set([randomPlanet]));
         }
         const randomLinks = new Set<string>();
-        for (let i = 0; i < 2; i++) {
-          if (reachableEdges.length > 0) {
-            const edge = reachableEdges[Math.floor(Math.random() * reachableEdges.length)];
-            randomLinks.add(linkKey(edge.from, edge.to));
-          }
+        for (let i = 0; i < 2 && reachableEdges.length > 0; i++) {
+          const edge =
+            reachableEdges[Math.floor(Math.random() * reachableEdges.length)];
+          randomLinks.add(linkKey(edge.from, edge.to));
         }
         setDeadLinks(randomLinks);
         break;
+      }
     }
   }
 
-  async function transmit() {
+  const transmit = useCallback(async () => {
+    if (!origin || !destination) return;
     setSending(true);
     setSendError(null);
     setResult(null);
@@ -147,14 +161,18 @@ export default function RelicDashboard() {
     } finally {
       setSending(false);
     }
-  }
+  }, [origin, destination, payload, deadNodes, deadLinks]);
 
-  // Automatic trigger on config changes to give a real-time reactive simulation experience!
+  // Debounced auto-trigger for a reactive simulation experience. Running inside
+  // a timeout keeps the setState calls out of the synchronous effect body and
+  // coalesces rapid edits (e.g. typing in the payload field).
   useEffect(() => {
-    if (origin && destination && payload && universe) {
-      transmit();
-    }
-  }, [origin, destination, deadNodes, deadLinks, universe]);
+    if (!(origin && destination && payload && universe)) return;
+    const handle = setTimeout(() => {
+      void transmit();
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [origin, destination, payload, deadNodes, deadLinks, universe, transmit]);
 
   return (
     <div className="min-h-screen bg-zinc-950 font-sans text-zinc-100 selection:bg-emerald-500/30">

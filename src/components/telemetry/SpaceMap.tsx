@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useCallback, useMemo, useState, useRef, useEffect } from "react";
 import type { PlanetNode } from "@/lib/relic/types";
 import type { VoidEdge } from "@/lib/relic/graph";
 import type { Route } from "@/lib/relic/router";
@@ -82,21 +82,24 @@ export default function SpaceMap({
   }, [minX, maxX, minY, maxY]);
 
   // Logarithmic visual size to avoid Caelum dwarfing others
-  const getVisualRadius = (radiusKm: number) => {
+  const getVisualRadius = useCallback((radiusKm: number) => {
     return 16 + Math.sqrt(radiusKm) * 0.08;
-  };
+  }, []);
 
-  const getTowerPos = (planet: PlanetNode, towerIndex: number, vr: number) => {
-    const total = planet.active_towers;
-    const angleDeg = (towerIndex * 360) / total;
-    const angleRad = (angleDeg * Math.PI) / 180;
-    const sx = scaleX(planet.x);
-    const sy = scaleY(planet.y);
-    return {
-      x: sx + vr * Math.sin(angleRad),
-      y: sy - vr * Math.cos(angleRad),
-    };
-  };
+  const getTowerPos = useCallback(
+    (planet: PlanetNode, towerIndex: number, vr: number) => {
+      const total = planet.active_towers;
+      const angleDeg = (towerIndex * 360) / total;
+      const angleRad = (angleDeg * Math.PI) / 180;
+      const sx = scaleX(planet.x);
+      const sy = scaleY(planet.y);
+      return {
+        x: sx + vr * Math.sin(angleRad),
+        y: sy - vr * Math.cos(angleRad),
+      };
+    },
+    [scaleX, scaleY],
+  );
 
   function linkKey(a: string, b: string): string {
     return a < b ? `${a}|${b}` : `${b}|${a}`;
@@ -147,18 +150,7 @@ export default function SpaceMap({
       }
     }
     return d;
-  }, [route, nodes]);
-
-  // Determine if a link is part of the active route
-  const activeHopsKeys = useMemo(() => {
-    const keys = new Set<string>();
-    if (route && route.deliverable) {
-      for (const hop of route.hops) {
-        keys.add(linkKey(hop.from, hop.to));
-      }
-    }
-    return keys;
-  }, [route]);
+  }, [route, nodes, getTowerPos, getVisualRadius]);
 
   // Dynamic coordinates for the tooltip lock, matching current zoom and pan
   const hoveredPlanetPos = useMemo(() => {
@@ -170,7 +162,7 @@ export default function SpaceMap({
       x: sx * zoom + pan.x,
       y: (sy - vr) * zoom + pan.y - 12,
     };
-  }, [hoveredPlanet, zoom, pan, scaleX, scaleY]);
+  }, [hoveredPlanet, zoom, pan, scaleX, scaleY, getVisualRadius]);
 
   // Hook for mouse wheel scroll zooming centered on mouse cursor
   useEffect(() => {
@@ -342,7 +334,6 @@ export default function SpaceMap({
 
                 const key = linkKey(edge.from, edge.to);
                 const isDead = deadLinks.has(key) || deadNodes.has(edge.from) || deadNodes.has(edge.to);
-                const isActive = activeHopsKeys.has(key);
 
                 return (
                   <g key={key}>
