@@ -369,11 +369,9 @@ export default function SpaceMap({
                       stroke={
                         isDead
                           ? "rgba(239, 68, 68, 0.4)"
-                          : isActive
-                          ? "#10b981"
                           : "rgba(255, 255, 255, 0.15)"
                       }
-                      strokeWidth={isActive ? "2" : "1.5"}
+                      strokeWidth="1.5"
                       strokeDasharray={isDead ? "4, 4" : "none"}
                       className="transition-all duration-300"
                     />
