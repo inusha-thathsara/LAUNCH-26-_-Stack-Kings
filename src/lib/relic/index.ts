@@ -6,5 +6,6 @@ export * from "./config";
 export * from "./latency";
 export * from "./graph";
 export * from "./router";
+export * from "./transmission";
 export { createStubGeometryProvider, StubGeometryProvider } from "./stubs/geometry.stub";
 export { createStubCodec, StubCodec } from "./stubs/codec.stub";
