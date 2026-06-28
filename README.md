@@ -241,3 +241,5 @@ No other file needs to change to swap a module.
 ## Tech stack
 
 Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind CSS · Vitest · tsx
+
+We are continuously improving this project through teamwork, innovation, and community feedback.
