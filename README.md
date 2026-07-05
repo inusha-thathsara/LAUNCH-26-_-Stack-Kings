@@ -69,17 +69,23 @@ npm run relic -- send Aegis Caelum "Hello world" --kill Dawn --cut Aegis-Boreas
 
 ### HTTP API
 
-- `GET /api/universe` — **M1**: metadata, nodes, adjacency, and the within-Lmax edges.
-- `POST /api/transmit` — **M2/M3/M4**:
+- `GET /api/health` — liveness probe (version, config path/hash, engine status).
+- `GET /api/universe` — **M1**: metadata, nodes, adjacency, and the within-Lmax edges (cached 1 h).
+- `POST /api/transmit` — **M2/M3/M4** (payload capped at 10 KB; structured error codes):
 
 ```bash
+curl http://localhost:3000/api/health
+
 curl -X POST http://localhost:3000/api/transmit \
   -H "Content-Type: application/json" \
   -d '{"origin":"Aegis","destination":"Caelum","payload":"Hello world","blockedNodes":["Dawn"]}'
 ```
 
 Returns the `packet` (with `hop_log`), the `route` (path + latency breakdown), and
-the reconstructed `delivered_payload`.
+the reconstructed `delivered_payload`. API routes are rate-limited (120 req/min per client).
+
+**Config override:** set `UNIVERSE_CONFIG_PATH` to point at an alternate
+`universe-config.json` before starting the server or container.
 
 ---
 
