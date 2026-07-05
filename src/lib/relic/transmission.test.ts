@@ -47,7 +47,14 @@ const C = node("C", 20, 14);
 
 describe("transmit", () => {
   it("delivers 'Hello world' across a multi-hop route (M2)", () => {
-    const result = transmit(universe([A, B, C]), geometry, codec, "A", "C", "Hello world");
+    const result = transmit(
+      universe([A, B, C]),
+      geometry,
+      codec,
+      "A",
+      "C",
+      "Hello world",
+    );
 
     expect(result.packet.status).toBe("delivered");
     expect(result.packet.current_id).toBe("C");
@@ -58,8 +65,19 @@ describe("transmit", () => {
   });
 
   it("records each planet's payload in its own dialect, matching the spec", () => {
-    const result = transmit(universe([A, B, C]), geometry, codec, "A", "C", "Hello world");
-    const [entryA, entryB, entryC] = result.packet.hop_log;
+    const result = transmit(
+      universe([A, B, C]),
+      geometry,
+      codec,
+      "A",
+      "C",
+      "Hello world",
+    );
+    const [entryA, entryB, entryC] = result.packet.hop_log as [
+      (typeof result.packet.hop_log)[0],
+      (typeof result.packet.hop_log)[1],
+      (typeof result.packet.hop_log)[2],
+    ];
 
     expect(result.packet.hop_log).toHaveLength(3);
 
@@ -72,19 +90,46 @@ describe("transmit", () => {
     expect(entryB.planet_id).toBe("B");
     expect(entryB.payload_dialect.base).toBe(5);
     expect(entryB.payload_dialect.digits).toEqual([
-      "242", "401", "413", "413", "421", "112", "434", "421", "424", "413", "400",
+      "242",
+      "401",
+      "413",
+      "413",
+      "421",
+      "112",
+      "434",
+      "421",
+      "424",
+      "413",
+      "400",
     ]);
 
     // Planet C in base 14 — the exact sequence from the challenge.
     expect(entryC.planet_id).toBe("C");
     expect(entryC.payload_dialect.base).toBe(14);
     expect(entryC.payload_dialect.digits).toEqual([
-      "52", "73", "7A", "7A", "7D", "24", "87", "7D", "82", "7A", "72",
+      "52",
+      "73",
+      "7A",
+      "7A",
+      "7D",
+      "24",
+      "87",
+      "7D",
+      "82",
+      "7A",
+      "72",
     ]);
   });
 
   it("keeps the ASCII payload intact at every hop", () => {
-    const result = transmit(universe([A, B, C]), geometry, codec, "A", "C", "Hello world");
+    const result = transmit(
+      universe([A, B, C]),
+      geometry,
+      codec,
+      "A",
+      "C",
+      "Hello world",
+    );
     const expectedAscii = [72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100];
     for (const entry of result.packet.hop_log) {
       expect(entry.payload_ascii).toEqual(expectedAscii);
@@ -92,8 +137,19 @@ describe("transmit", () => {
   });
 
   it("links each non-final entry to the next hop and terminates cleanly", () => {
-    const result = transmit(universe([A, B, C]), geometry, codec, "A", "C", "Hello world");
-    const [entryA, entryB, entryC] = result.packet.hop_log;
+    const result = transmit(
+      universe([A, B, C]),
+      geometry,
+      codec,
+      "A",
+      "C",
+      "Hello world",
+    );
+    const [entryA, entryB, entryC] = result.packet.hop_log as [
+      (typeof result.packet.hop_log)[0],
+      (typeof result.packet.hop_log)[1],
+      (typeof result.packet.hop_log)[2],
+    ];
 
     expect(entryA.next_hop_id).toBe("B");
     expect(entryA.void_latency_ms).toBeGreaterThan(0);
@@ -104,13 +160,34 @@ describe("transmit", () => {
 
   it("records the next-hop codex conversion and binary stream that crosses the void", () => {
     const relic = createRelicCodec();
-    const result = transmit(universe([A, B, C]), geometry, relic, "A", "C", "Hello world");
-    const [entryA, entryB, entryC] = result.packet.hop_log;
+    const result = transmit(
+      universe([A, B, C]),
+      geometry,
+      relic,
+      "A",
+      "C",
+      "Hello world",
+    );
+    const [entryA, entryB, entryC] = result.packet.hop_log as [
+      (typeof result.packet.hop_log)[0],
+      (typeof result.packet.hop_log)[1],
+      (typeof result.packet.hop_log)[2],
+    ];
 
     // A re-encodes into B's dialect (base 5) before beaming.
     expect(entryA.next_hop_codex).toBe(5);
     expect(entryA.next_hop_dialect?.digits).toEqual([
-      "242", "401", "413", "413", "421", "112", "434", "421", "424", "413", "400",
+      "242",
+      "401",
+      "413",
+      "413",
+      "421",
+      "112",
+      "434",
+      "421",
+      "424",
+      "413",
+      "400",
     ]);
     const expectedStream = relic.serializeToBinary(
       relic.encodeToCodex(relic.toAscii("Hello world"), 5),
@@ -127,14 +204,28 @@ describe("transmit", () => {
   });
 
   it("accumulates cumulative latency up to the route total", () => {
-    const result = transmit(universe([A, B, C]), geometry, codec, "A", "C", "Hello world");
-    const last = result.packet.hop_log[result.packet.hop_log.length - 1];
+    const result = transmit(
+      universe([A, B, C]),
+      geometry,
+      codec,
+      "A",
+      "C",
+      "Hello world",
+    );
+    const last = result.packet.hop_log[result.packet.hop_log.length - 1]!;
     expect(last.cumulative_latency_ms).toBeCloseTo(result.route.total_latency_ms, 9);
   });
 
   it("marks a packet undeliverable when no route exists", () => {
     const far = node("Z", 1_000_000, 10);
-    const result = transmit(universe([A, B, C, far]), geometry, codec, "A", "Z", "Hello world");
+    const result = transmit(
+      universe([A, B, C, far]),
+      geometry,
+      codec,
+      "A",
+      "Z",
+      "Hello world",
+    );
 
     expect(result.packet.status).toBe("undeliverable");
     expect(result.packet.hop_log).toHaveLength(0);

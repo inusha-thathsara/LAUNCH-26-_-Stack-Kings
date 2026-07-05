@@ -91,9 +91,9 @@ describe("StubGeometryProvider", () => {
   it("places tower 0 at the top (positive y)", () => {
     const towers = geo.towerPositions(planet());
     expect(towers).toHaveLength(4);
-    expect(towers[0].angle_deg).toBe(0);
-    expect(towers[0].y_km).toBeCloseTo(1000, 5);
-    expect(towers[0].x_km).toBeCloseTo(0, 5);
+    expect(towers[0]!.angle_deg).toBe(0);
+    expect(towers[0]!.y_km).toBeCloseTo(1000, 5);
+    expect(towers[0]!.x_km).toBeCloseTo(0, 5);
   });
 
   it("computes scaled center distance", () => {
@@ -104,8 +104,20 @@ describe("StubGeometryProvider", () => {
   });
 
   it("computes center-based void distance", () => {
-    const a = planet({ id: "A", x: 0, y: 0, radius_km: 1000, atmosphere_thickness_km: 50 });
-    const b = planet({ id: "B", x: 3, y: 4, radius_km: 2000, atmosphere_thickness_km: 100 });
+    const a = planet({
+      id: "A",
+      x: 0,
+      y: 0,
+      radius_km: 1000,
+      atmosphere_thickness_km: 50,
+    });
+    const b = planet({
+      id: "B",
+      x: 3,
+      y: 4,
+      radius_km: 2000,
+      atmosphere_thickness_km: 100,
+    });
     // 500000 - (1000+50) - (2000+100)
     expect(geo.voidDistanceKm(a, b)).toBeCloseTo(500000 - 1050 - 2100, 5);
   });

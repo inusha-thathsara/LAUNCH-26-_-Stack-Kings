@@ -15,9 +15,14 @@ interface UniverseResponse {
   edges: VoidEdge[];
 }
 
-export default function RelicDashboard() {
+interface RelicDashboardProps {
+  appVersion: string;
+}
+
+export default function RelicDashboard({ appVersion }: RelicDashboardProps) {
   const [universe, setUniverse] = useState<UniverseResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
@@ -40,14 +45,16 @@ export default function RelicDashboard() {
       .then((data) => {
         setUniverse(data);
         if (data.nodes.length > 0) {
-          setOrigin(data.nodes[0].id);
-          setDestination(data.nodes[data.nodes.length - 1].id);
+          const first = data.nodes[0]!;
+          const last = data.nodes[data.nodes.length - 1]!;
+          setOrigin(first.id);
+          setDestination(last.id);
         }
       })
       .catch((error: unknown) => {
         setLoadError(error instanceof Error ? error.message : "Unknown error");
       });
-  }, []);
+  }, [reloadToken]);
 
   const reachableEdges = useMemo(
     () => universe?.edges.filter((edge) => edge.within_lmax) ?? [],
@@ -119,14 +126,13 @@ export default function RelicDashboard() {
       case "chaos": {
         // Randomly take one interior planet and up to two links down.
         if (interior.length > 0) {
-          const randomPlanet =
-            interior[Math.floor(Math.random() * interior.length)];
+          const randomPlanet = interior[Math.floor(Math.random() * interior.length)]!;
           setDeadNodes(new Set([randomPlanet]));
         }
         const randomLinks = new Set<string>();
         for (let i = 0; i < 2 && reachableEdges.length > 0; i++) {
           const edge =
-            reachableEdges[Math.floor(Math.random() * reachableEdges.length)];
+            reachableEdges[Math.floor(Math.random() * reachableEdges.length)]!;
           randomLinks.add(linkKey(edge.from, edge.to));
         }
         setDeadLinks(randomLinks);
@@ -180,7 +186,6 @@ export default function RelicDashboard() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.05),transparent_50%)] pointer-events-none"></div>
 
       <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 relative z-10 sm:px-6 lg:gap-8">
-        
         {/* Header telemetry HUD */}
         <header className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-white/10 pb-6 gap-4">
           <div className="flex flex-col gap-1.5">
@@ -188,8 +193,11 @@ export default function RelicDashboard() {
               <span className="rounded bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
                 Relic Ring Protocol
               </span>
-              <span className="text-[10px] font-mono text-zinc-500">
-                VER 4.2.9 // PROT-STABLE
+              <span
+                className="text-[10px] font-mono text-zinc-500"
+                data-testid="app-version"
+              >
+                v{appVersion} <span className="text-zinc-600">· PROT-STABLE</span>
               </span>
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl bg-gradient-to-r from-white via-zinc-100 to-zinc-500 bg-clip-text text-transparent">
@@ -213,7 +221,8 @@ export default function RelicDashboard() {
               <div className="flex flex-col">
                 <span className="text-[9px] text-zinc-500 uppercase">Lmax Limit</span>
                 <span className="text-zinc-200 font-bold">
-                  {(universe.metadata.max_void_hop_distance_km / 1_000_000).toFixed(0)}M km
+                  {(universe.metadata.max_void_hop_distance_km / 1_000_000).toFixed(0)}M
+                  km
                 </span>
               </div>
               <div className="h-6 w-px bg-white/10"></div>
@@ -228,8 +237,21 @@ export default function RelicDashboard() {
         </header>
 
         {loadError && (
-          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-            Error loading Zeta-26 universe map: {loadError}
+          <div
+            role="alert"
+            className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+          >
+            <span>Error loading Zeta-26 universe map: {loadError}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setLoadError(null);
+                setReloadToken((n) => n + 1);
+              }}
+              className="shrink-0 rounded-lg border border-red-400/40 bg-red-950/40 px-3 py-1.5 text-xs font-semibold text-red-200 hover:bg-red-950/70 transition-colors cursor-pointer"
+            >
+              Retry
+            </button>
           </div>
         )}
 
@@ -237,7 +259,6 @@ export default function RelicDashboard() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[340px_1fr]">
             {/* Control HUD Sidebar */}
             <aside className="flex flex-col gap-5 rounded-2xl border border-white/10 bg-zinc-900/40 p-5 backdrop-blur-xl shadow-2xl">
-              
               {/* Presets and Chaos Trigger */}
               <div className="flex flex-col gap-2.5">
                 <h3 className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
@@ -300,44 +321,66 @@ export default function RelicDashboard() {
                 </h3>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-medium uppercase text-zinc-500">
+                  <label
+                    htmlFor="origin-terminal"
+                    className="text-[10px] font-medium uppercase text-zinc-500"
+                  >
                     Origin Terminal
                   </label>
                   <select
+                    id="origin-terminal"
                     className="rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-emerald-500/50 transition-all"
                     value={origin}
                     onChange={(e) => setOrigin(e.target.value)}
                   >
                     {universe.nodes.map((node) => (
-                      <option key={node.id} value={node.id} disabled={deadNodes.has(node.id)}>
-                        {node.id} {deadNodes.has(node.id) ? " (OFFLINE)" : `(base ${node.codex})`}
+                      <option
+                        key={node.id}
+                        value={node.id}
+                        disabled={deadNodes.has(node.id)}
+                      >
+                        {node.id}{" "}
+                        {deadNodes.has(node.id) ? " (OFFLINE)" : `(base ${node.codex})`}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-medium uppercase text-zinc-500">
+                  <label
+                    htmlFor="destination-terminal"
+                    className="text-[10px] font-medium uppercase text-zinc-500"
+                  >
                     Destination Terminal
                   </label>
                   <select
+                    id="destination-terminal"
                     className="rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-emerald-500/50 transition-all"
                     value={destination}
                     onChange={(e) => setDestination(e.target.value)}
                   >
                     {universe.nodes.map((node) => (
-                      <option key={node.id} value={node.id} disabled={deadNodes.has(node.id)}>
-                        {node.id} {deadNodes.has(node.id) ? " (OFFLINE)" : `(base ${node.codex})`}
+                      <option
+                        key={node.id}
+                        value={node.id}
+                        disabled={deadNodes.has(node.id)}
+                      >
+                        {node.id}{" "}
+                        {deadNodes.has(node.id) ? " (OFFLINE)" : `(base ${node.codex})`}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-medium uppercase text-zinc-500">
+                  <label
+                    htmlFor="payload-message"
+                    className="text-[10px] font-medium uppercase text-zinc-500"
+                  >
                     Payload Message
                   </label>
                   <input
+                    id="payload-message"
                     className="rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-emerald-500/50 transition-all font-mono"
                     value={payload}
                     onChange={(e) => setPayload(e.target.value)}
@@ -358,28 +401,33 @@ export default function RelicDashboard() {
                 </div>
                 <div className="flex flex-wrap gap-1.5 max-h-36 overflow-auto">
                   {deadNodes.size === 0 && deadLinks.size === 0 ? (
-                    <span className="text-[10px] text-zinc-500 italic">No network faults detected. All systems green.</span>
+                    <span className="text-[10px] text-zinc-500 italic">
+                      No network faults detected. All systems green.
+                    </span>
                   ) : (
                     <>
                       {[...deadNodes].map((nodeId) => (
-                        <span
+                        <button
                           key={nodeId}
+                          type="button"
                           onClick={() => toggleNode(nodeId)}
                           className="rounded bg-red-950/40 hover:bg-red-950 text-red-400 border border-red-500/20 px-2 py-0.5 text-[10px] font-mono cursor-pointer transition-colors"
                         >
                           Node: {nodeId} ⨯
-                        </span>
+                        </button>
                       ))}
                       {[...deadLinks].map((key) => {
                         const [a, b] = key.split("|");
+                        if (!a || !b) return null;
                         return (
-                          <span
+                          <button
                             key={key}
+                            type="button"
                             onClick={() => toggleLink(a, b)}
                             className="rounded bg-orange-950/40 hover:bg-orange-950 text-orange-400 border border-orange-500/20 px-2 py-0.5 text-[10px] font-mono cursor-pointer transition-colors"
                           >
                             Link: {a}↔{b} ⨯
-                          </span>
+                          </button>
                         );
                       })}
                     </>
@@ -400,7 +448,10 @@ export default function RelicDashboard() {
             {/* Simulation Dashboard Main */}
             <main className="flex flex-col gap-6">
               {sendError && (
-                <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                <div
+                  role="alert"
+                  className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+                >
                   {sendError}
                 </div>
               )}

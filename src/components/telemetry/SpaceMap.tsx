@@ -105,16 +105,24 @@ export default function SpaceMap({
     return a < b ? `${a}|${b}` : `${b}|${a}`;
   }
 
+  function activateFromKeyboard(event: React.KeyboardEvent, action: () => void): void {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      action();
+    }
+  }
+
   // Build the complete packet travel path for animation
   const animationPathD = useMemo(() => {
     if (!route || !route.deliverable || route.path.length < 2) return "";
+    const startStep = route.steps[0];
+    if (!startStep) return "";
     let d = "";
 
     // Start from the first step exit tower
-    const startStep = route.steps[0];
     const startPlanet = nodes.find((n) => n.id === startStep.planet_id);
     if (!startPlanet) return "";
-    
+
     const vrStart = getVisualRadius(startPlanet.radius_km);
     const startPos = getTowerPos(startPlanet, startStep.exit_tower, vrStart);
     d += `M ${startPos.x} ${startPos.y}`;
@@ -122,6 +130,7 @@ export default function SpaceMap({
     for (let i = 0; i < route.hops.length; i += 1) {
       const hop = route.hops[i];
       const nextStep = route.steps[i + 1];
+      if (!hop || !nextStep) continue;
       const fromPlanet = nodes.find((n) => n.id === hop.from);
       const toPlanet = nodes.find((n) => n.id === hop.to);
       if (!fromPlanet || !toPlanet) continue;
@@ -140,11 +149,11 @@ export default function SpaceMap({
       if (entryTower !== exitTower) {
         const angle1 = (entryTower * 360) / totalTowers;
         const angle2 = (exitTower * 360) / totalTowers;
-        
+
         let diff = angle2 - angle1;
         while (diff < -180) diff += 360;
         while (diff > 180) diff -= 360;
-        
+
         const sweepFlag = diff >= 0 ? 1 : 0;
         d += ` A ${vrTo} ${vrTo} 0 0 ${sweepFlag} ${nextExitPos.x} ${nextExitPos.y}`;
       }
@@ -171,7 +180,7 @@ export default function SpaceMap({
 
     const handleNativeWheel = (e: WheelEvent) => {
       e.preventDefault();
-      
+
       const zoomIntensity = 0.08;
       const rect = svg.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
@@ -182,7 +191,7 @@ export default function SpaceMap({
 
       setZoom((prevZoom) => {
         const nextZoom = Math.min(6, Math.max(0.5, prevZoom * zoomFactor));
-        
+
         setPan((prevPan) => {
           const dx = mouseX - prevPan.x;
           const dy = mouseY - prevPan.y;
@@ -207,8 +216,8 @@ export default function SpaceMap({
     const target = e.target as SVGElement;
     // Start drag on background or connections, not on nodes/buttons
     if (
-      target.tagName === "svg" || 
-      target.tagName === "rect" || 
+      target.tagName === "svg" ||
+      target.tagName === "rect" ||
       (target.tagName === "line" && target.getAttribute("stroke-width") === "1.5") ||
       (target.tagName === "line" && target.getAttribute("stroke") === "transparent")
     ) {
@@ -284,7 +293,9 @@ export default function SpaceMap({
         <svg
           ref={svgRef}
           viewBox={`0 0 ${width} ${height}`}
-          className={`w-full h-auto max-h-[500px] transition-colors duration-150 ${
+          role="img"
+          aria-label="Zeta-26 quantum radar map. Click or press Enter on planets to toggle offline. Tab to void links to sever connections."
+          className={`w-full h-auto max-h-[min(500px,60vh)] transition-colors duration-150 ${
             isDragging ? "cursor-grabbing" : "cursor-grab"
           }`}
           onMouseDown={handleMouseDown}
@@ -294,12 +305,7 @@ export default function SpaceMap({
         >
           {/* Grid Background (Static overlay) */}
           <defs>
-            <pattern
-              id="grid"
-              width="40"
-              height="40"
-              patternUnits="userSpaceOnUse"
-            >
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
               <path
                 d="M 40 0 L 0 0 0 40"
                 fill="none"
@@ -333,10 +339,32 @@ export default function SpaceMap({
                 const y2 = scaleY(nodeB.y);
 
                 const key = linkKey(edge.from, edge.to);
-                const isDead = deadLinks.has(key) || deadNodes.has(edge.from) || deadNodes.has(edge.to);
+                const isDead =
+                  deadLinks.has(key) ||
+                  deadNodes.has(edge.from) ||
+                  deadNodes.has(edge.to);
 
                 return (
                   <g key={key}>
+                    {/* Keyboard-focusable link toggle at midpoint */}
+                    <circle
+                      cx={(x1 + x2) / 2}
+                      cy={(y1 + y2) / 2}
+                      r="8"
+                      fill="transparent"
+                      stroke="transparent"
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`Toggle void link ${edge.from} to ${edge.to}${isDead ? " (offline)" : ""}`}
+                      className="cursor-pointer focus:outline-none focus-visible:stroke-emerald-400 focus-visible:stroke-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleLink(edge.from, edge.to);
+                      }}
+                      onKeyDown={(e) =>
+                        activateFromKeyboard(e, () => onToggleLink(edge.from, edge.to))
+                      }
+                    />
                     {/* Interactive invisible thick hit area */}
                     <line
                       x1={x1}
@@ -346,6 +374,7 @@ export default function SpaceMap({
                       stroke="transparent"
                       strokeWidth="12"
                       className="cursor-pointer"
+                      aria-hidden="true"
                       onClick={(e) => {
                         e.stopPropagation();
                         onToggleLink(edge.from, edge.to);
@@ -358,9 +387,7 @@ export default function SpaceMap({
                       x2={x2}
                       y2={y2}
                       stroke={
-                        isDead
-                          ? "rgba(239, 68, 68, 0.4)"
-                          : "rgba(255, 255, 255, 0.15)"
+                        isDead ? "rgba(239, 68, 68, 0.4)" : "rgba(255, 255, 255, 0.15)"
                       }
                       strokeWidth="1.5"
                       strokeDasharray={isDead ? "4, 4" : "none"}
@@ -394,7 +421,11 @@ export default function SpaceMap({
                   strokeLinejoin="round"
                 />
                 {/* Animated packet pulse */}
-                <circle r="5" fill="#34d399" className="filter drop-shadow-[0_0_6px_#10b981]">
+                <circle
+                  r="5"
+                  fill="#34d399"
+                  className="filter drop-shadow-[0_0_6px_#10b981]"
+                >
                   <animateMotion
                     dur="4s"
                     repeatCount="indefinite"
@@ -421,9 +452,15 @@ export default function SpaceMap({
                 <g
                   key={node.id}
                   className="group cursor-pointer"
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Planet ${node.id}${isDead ? ", offline" : ""}${isOrigin ? ", origin" : ""}${isDestination ? ", destination" : ""}. Press Enter to toggle offline.`}
                   onMouseEnter={() => setHoveredPlanet(node)}
                   onMouseLeave={() => setHoveredPlanet(null)}
                   onClick={() => onToggleNode(node.id)}
+                  onKeyDown={(e) =>
+                    activateFromKeyboard(e, () => onToggleNode(node.id))
+                  }
                 >
                   {/* 3a. Atmosphere / Glow Envelope */}
                   <circle
@@ -434,23 +471,23 @@ export default function SpaceMap({
                       isDead
                         ? "rgba(239, 68, 68, 0.03)"
                         : isOrigin
-                        ? "rgba(59, 130, 246, 0.08)"
-                        : isDestination
-                        ? "rgba(168, 85, 247, 0.08)"
-                        : isInRoute
-                        ? "rgba(16, 185, 129, 0.08)"
-                        : "rgba(255, 255, 255, 0.02)"
+                          ? "rgba(59, 130, 246, 0.08)"
+                          : isDestination
+                            ? "rgba(168, 85, 247, 0.08)"
+                            : isInRoute
+                              ? "rgba(16, 185, 129, 0.08)"
+                              : "rgba(255, 255, 255, 0.02)"
                     }
                     stroke={
                       isDead
                         ? "rgba(239, 68, 68, 0.15)"
                         : isOrigin
-                        ? "rgba(59, 130, 246, 0.2)"
-                        : isDestination
-                        ? "rgba(168, 85, 247, 0.2)"
-                        : isInRoute
-                        ? "rgba(16, 185, 129, 0.2)"
-                        : "rgba(255, 255, 255, 0.06)"
+                          ? "rgba(59, 130, 246, 0.2)"
+                          : isDestination
+                            ? "rgba(168, 85, 247, 0.2)"
+                            : isInRoute
+                              ? "rgba(16, 185, 129, 0.2)"
+                              : "rgba(255, 255, 255, 0.06)"
                     }
                     strokeWidth="1.2"
                     className="transition-all duration-300"
@@ -466,8 +503,8 @@ export default function SpaceMap({
                       isDead
                         ? "rgba(239, 68, 68, 0.2)"
                         : isInRoute
-                        ? "rgba(16, 185, 129, 0.5)"
-                        : "rgba(255, 255, 255, 0.12)"
+                          ? "rgba(16, 185, 129, 0.5)"
+                          : "rgba(255, 255, 255, 0.12)"
                     }
                     strokeWidth="1"
                     strokeDasharray="3, 3"
@@ -483,21 +520,21 @@ export default function SpaceMap({
                       isDead
                         ? "#180808"
                         : isOrigin
-                        ? "url(#originGrad)"
-                        : isDestination
-                        ? "url(#destGrad)"
-                        : "url(#planetGrad)"
+                          ? "url(#originGrad)"
+                          : isDestination
+                            ? "url(#destGrad)"
+                            : "url(#planetGrad)"
                     }
                     stroke={
                       isDead
                         ? "#ef4444"
                         : isOrigin
-                        ? "#3b82f6"
-                        : isDestination
-                        ? "#a855f7"
-                        : isInRoute
-                        ? "#10b981"
-                        : "rgba(255, 255, 255, 0.3)"
+                          ? "#3b82f6"
+                          : isDestination
+                            ? "#a855f7"
+                            : isInRoute
+                              ? "#10b981"
+                              : "rgba(255, 255, 255, 0.3)"
                     }
                     strokeWidth={isOrigin || isDestination || isInRoute ? "2.5" : "1.5"}
                     className="transition-all duration-300 group-hover:stroke-white/80"
@@ -555,10 +592,10 @@ export default function SpaceMap({
                       isDead
                         ? "fill-red-400 line-through"
                         : isOrigin
-                        ? "fill-blue-400"
-                        : isDestination
-                        ? "fill-purple-400"
-                        : "fill-zinc-300"
+                          ? "fill-blue-400"
+                          : isDestination
+                            ? "fill-purple-400"
+                            : "fill-zinc-300"
                     }`}
                   >
                     {node.id}
@@ -574,6 +611,7 @@ export default function SpaceMap({
           <button
             type="button"
             onClick={handleZoomIn}
+            aria-label="Zoom in"
             className="flex h-6 w-6 items-center justify-center rounded bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-[10px] border border-white/5 cursor-pointer transition-colors"
             title="Zoom In"
           >
@@ -582,6 +620,7 @@ export default function SpaceMap({
           <button
             type="button"
             onClick={handleZoomOut}
+            aria-label="Zoom out"
             className="flex h-6 w-6 items-center justify-center rounded bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-[10px] border border-white/5 cursor-pointer transition-colors"
             title="Zoom Out"
           >
@@ -590,6 +629,7 @@ export default function SpaceMap({
           <button
             type="button"
             onClick={handleResetZoom}
+            aria-label="Reset zoom"
             className="flex h-6 w-6 items-center justify-center rounded bg-zinc-900 hover:bg-zinc-800 text-white text-[9px] border border-white/5 cursor-pointer transition-colors font-mono"
             title="Reset View"
           >
@@ -607,7 +647,9 @@ export default function SpaceMap({
             }}
           >
             <div className="flex items-center justify-between border-b border-white/5 pb-1.5 mb-1.5">
-              <span className={`text-xs font-bold ${deadNodes.has(hoveredPlanet.id) ? "text-red-400 line-through" : "text-white"}`}>
+              <span
+                className={`text-xs font-bold ${deadNodes.has(hoveredPlanet.id) ? "text-red-400 line-through" : "text-white"}`}
+              >
                 {hoveredPlanet.id}
               </span>
               <span className="rounded bg-zinc-800 px-1 py-0.5 font-mono text-[9px] text-zinc-400">
