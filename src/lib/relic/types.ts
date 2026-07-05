@@ -97,8 +97,23 @@ export interface HopLogEntry {
   segments: number;
   /** Payload as ASCII bytes while routed internally between towers. */
   payload_ascii: number[];
-  /** Payload encoded in this planet's codex dialect. */
+  /** Payload encoded in this planet's (local) codex dialect. */
   payload_dialect: DialectView;
+  /**
+   * Codex base of the NEXT hop; the payload is re-encoded into this dialect
+   * before being beamed across the void. Omitted at the destination.
+   */
+  next_hop_codex?: number;
+  /**
+   * The payload encoded into the next hop's dialect (what actually crosses the
+   * void). Omitted at the destination.
+   */
+  next_hop_dialect?: DialectView;
+  /**
+   * Flat binary serialization of {@link next_hop_dialect} that travels the void
+   * laser link. Omitted at the destination.
+   */
+  binary_stream?: string;
   /** Internal crust transit time for this planet (Tp), in ms. */
   internal_latency_ms: number;
   /** Void travel time for the hop leaving this planet (Tv); omitted at destination. */

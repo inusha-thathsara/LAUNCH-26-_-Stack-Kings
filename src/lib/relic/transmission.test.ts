@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { createRelicCodec } from "./codec";
 import { createStubCodec } from "./stubs/codec.stub";
 import { createStubGeometryProvider } from "./stubs/geometry.stub";
 import { transmit } from "./transmission";
@@ -99,6 +100,30 @@ describe("transmit", () => {
     expect(entryB.next_hop_id).toBe("C");
     expect(entryC.next_hop_id).toBeUndefined();
     expect(entryC.void_latency_ms).toBeUndefined();
+  });
+
+  it("records the next-hop codex conversion and binary stream that crosses the void", () => {
+    const relic = createRelicCodec();
+    const result = transmit(universe([A, B, C]), geometry, relic, "A", "C", "Hello world");
+    const [entryA, entryB, entryC] = result.packet.hop_log;
+
+    // A re-encodes into B's dialect (base 5) before beaming.
+    expect(entryA.next_hop_codex).toBe(5);
+    expect(entryA.next_hop_dialect?.digits).toEqual([
+      "242", "401", "413", "413", "421", "112", "434", "421", "424", "413", "400",
+    ]);
+    const expectedStream = relic.serializeToBinary(
+      relic.encodeToCodex(relic.toAscii("Hello world"), 5),
+    );
+    expect(entryA.binary_stream).toBe(expectedStream);
+
+    // B re-encodes into C's dialect (base 14).
+    expect(entryB.next_hop_codex).toBe(14);
+
+    // The destination has no outgoing encoding.
+    expect(entryC.next_hop_codex).toBeUndefined();
+    expect(entryC.next_hop_dialect).toBeUndefined();
+    expect(entryC.binary_stream).toBeUndefined();
   });
 
   it("accumulates cumulative latency up to the route total", () => {

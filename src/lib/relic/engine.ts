@@ -9,9 +9,9 @@
 
 import type { Codec, GeometryProvider } from "./contracts";
 import { parseUniverseConfig } from "./config";
+import { createRelicCodec } from "./codec";
 import { buildNetworkGraph, type NetworkGraph } from "./graph";
 import { ResilientNetwork } from "./resilience";
-import { createStubCodec } from "./stubs/codec.stub";
 import { createStubGeometryProvider } from "./stubs/geometry.stub";
 import type { Universe } from "./types";
 
@@ -34,11 +34,14 @@ export function createEngine(rawConfig: unknown): Engine {
   const universe = parseUniverseConfig(rawConfig);
 
   // ===== Teammate integration swap point =====
-  // Replace these two factories with the real mapping / encoding modules.
+  // Geometry still uses the functional stub provider (a complete, correct
+  // implementation); replace it with the mapping teammate's module if/when a
+  // dedicated one lands. The codec is the production RelicCodec, which realizes
+  // the codex -> binary serialization mandated by the protocol.
   const geometry: GeometryProvider = createStubGeometryProvider(
     universe.metadata,
   );
-  const codec: Codec = createStubCodec();
+  const codec: Codec = createRelicCodec();
   // ============================================
 
   const graph = buildNetworkGraph(universe, geometry);
