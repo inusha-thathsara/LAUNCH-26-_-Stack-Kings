@@ -45,13 +45,7 @@ export function transmit(
   payload: string,
   options: RouteOptions = {},
 ): TransmissionResult {
-  const route = findShortestRoute(
-    universe,
-    geometry,
-    originId,
-    destinationId,
-    options,
-  );
+  const route = findShortestRoute(universe, geometry, originId, destinationId, options);
 
   if (!route.deliverable) {
     return {
@@ -80,27 +74,36 @@ export function transmit(
     stream: string;
   } | null> = [];
   for (let i = 0; i < route.hops.length; i += 1) {
-    const nextCodex = universe.nodesById.get(route.path[i + 1])!.codex;
+    const nextPlanetId = route.path[i + 1];
+    const nextNode = nextPlanetId ? universe.nodesById.get(nextPlanetId) : undefined;
+    if (!nextNode) continue;
     const incomingAscii = asciiByPlanet[i];
+    if (!incomingAscii) continue;
 
-    const encoded = codec.encodeToCodex(incomingAscii, nextCodex);
+    const encoded = codec.encodeToCodex(incomingAscii, nextNode.codex);
     const stream = codec.serializeToBinary(encoded);
-    const received = codec.deserializeFromBinary(stream, nextCodex);
+    const received = codec.deserializeFromBinary(stream, nextNode.codex);
     const decodedAscii = codec.decodeFromCodex(received);
 
-    outgoingByPlanet.push({ base: nextCodex, digits: encoded.digits, stream });
+    outgoingByPlanet.push({ base: nextNode.codex, digits: encoded.digits, stream });
     asciiByPlanet.push(decodedAscii);
   }
 
   const deliveredAscii = asciiByPlanet[asciiByPlanet.length - 1];
+  if (!deliveredAscii) {
+    throw new Error("Transmission produced no payload output.");
+  }
   const deliveredPayload = codec.fromAscii(deliveredAscii);
 
   const hop_log: HopLogEntry[] = [];
   let cumulative = 0;
   for (let i = 0; i < route.steps.length; i += 1) {
     const step = route.steps[i];
-    const planet = universe.nodesById.get(step.planet_id)!;
+    if (!step) continue;
+    const planet = universe.nodesById.get(step.planet_id);
+    if (!planet) continue;
     const planetAscii = asciiByPlanet[i];
+    if (!planetAscii) continue;
     const dialect = codec.encodeToCodex(planetAscii, planet.codex);
 
     cumulative += step.internal.total_ms;

@@ -69,7 +69,7 @@ describe("universe server loader", () => {
     clearEngineCache();
     const engine = getEngine();
     expect(engine.universe.nodes).toHaveLength(2);
-    expect(engine.universe.nodes[0].id).toBe("A");
+    expect(engine.universe.nodes[0]!.id).toBe("A");
   });
 
   it("reloadEngine rebuilds from disk after cache clear", () => {

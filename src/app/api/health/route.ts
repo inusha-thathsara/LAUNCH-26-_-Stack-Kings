@@ -1,8 +1,6 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { handleApiRoute } from "@/lib/api/route-handler";
 import { captureApiError } from "@/lib/observability/sentry";
+import { APP_VERSION } from "@/lib/version";
 import {
   getEngine,
   universeConfigHash,
@@ -10,17 +8,6 @@ import {
 } from "@/lib/relic/server/universe";
 
 export const runtime = "nodejs";
-
-function readAppVersion(): string {
-  try {
-    const pkg = JSON.parse(
-      readFileSync(join(process.cwd(), "package.json"), "utf8"),
-    ) as { version?: string };
-    return pkg.version ?? "unknown";
-  } catch {
-    return "unknown";
-  }
-}
 
 /**
  * Liveness/readiness probe for container orchestration and deploy verification.
@@ -31,7 +18,7 @@ export async function GET() {
       getEngine();
       return Response.json({
         status: "ok",
-        version: readAppVersion(),
+        version: APP_VERSION,
         config_path: universeConfigPath(),
         config_hash: universeConfigHash(),
         engine_loaded: true,
@@ -42,7 +29,7 @@ export async function GET() {
       return Response.json(
         {
           status: "degraded",
-          version: readAppVersion(),
+          version: APP_VERSION,
           config_path: universeConfigPath(),
           engine_loaded: false,
           error: message,

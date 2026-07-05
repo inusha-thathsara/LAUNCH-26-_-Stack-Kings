@@ -14,16 +14,19 @@ export default function CodexTerminal({ hopLog }: CodexTerminalProps) {
     return (
       <div className="flex h-full min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-zinc-900/20 text-center p-6 backdrop-blur-md">
         <span className="text-4xl">📡</span>
-        <h3 className="mt-4 text-sm font-semibold text-zinc-300">Dialect Codex Decoder Offline</h3>
+        <h3 className="mt-4 text-sm font-semibold text-zinc-300">
+          Dialect Codex Decoder Offline
+        </h3>
         <p className="mt-2 text-xs text-zinc-500 max-w-xs">
-          Transmit a packet to initiate dialect conversion, byte serialization, and binary laser telemetry.
+          Transmit a packet to initiate dialect conversion, byte serialization, and
+          binary laser telemetry.
         </p>
       </div>
     );
   }
 
   // Ensure the selected hop index is valid
-  const currentHop = hopLog.find((h) => h.sequence === selectedHopSeq) ?? hopLog[0];
+  const currentHop = hopLog.find((h) => h.sequence === selectedHopSeq) ?? hopLog[0]!;
   const isDestination = currentHop.next_hop_id === undefined;
 
   // Helper to convert character to printable form (space, etc.)
@@ -54,6 +57,7 @@ export default function CodexTerminal({ hopLog }: CodexTerminalProps) {
             <button
               key={hop.sequence}
               type="button"
+              data-testid="codex-hop-tab"
               onClick={() => setSelectedHopSeq(hop.sequence)}
               className={`flex shrink-0 flex-col items-start rounded-lg border px-3 py-1.5 text-left transition-all cursor-pointer ${
                 isActive
@@ -77,16 +81,23 @@ export default function CodexTerminal({ hopLog }: CodexTerminalProps) {
         {/* Header Telemetry */}
         <div className="grid grid-cols-2 gap-2 border-b border-zinc-800 pb-3 text-[10px] text-zinc-500">
           <div>
-            NODE IDENTIFIER: <span className="text-zinc-300">{currentHop.planet_id}</span>
+            NODE IDENTIFIER:{" "}
+            <span className="text-zinc-300">{currentHop.planet_id}</span>
           </div>
           <div className="text-right">
-            LOCAL DIALECT: <span className="text-zinc-300">Base {currentHop.codex}</span>
+            LOCAL DIALECT:{" "}
+            <span className="text-zinc-300">Base {currentHop.codex}</span>
           </div>
           <div>
-            INTERNAL TRANSIT: <span className="text-zinc-300">{currentHop.entry_tower} &rarr; {currentHop.exit_tower} ({currentHop.segments} segs)</span>
+            INTERNAL TRANSIT:{" "}
+            <span className="text-zinc-300">
+              {currentHop.entry_tower} &rarr; {currentHop.exit_tower} (
+              {currentHop.segments} segs)
+            </span>
           </div>
           <div className="text-right">
-            NEXT HOP: <span className="text-zinc-300">
+            NEXT HOP:{" "}
+            <span className="text-zinc-300">
               {isDestination
                 ? "FINAL DESTINATION"
                 : `${currentHop.next_hop_id} (B-${currentHop.next_hop_codex})`}
@@ -116,12 +127,17 @@ export default function CodexTerminal({ hopLog }: CodexTerminalProps) {
                 const nextDigit = currentHop.next_hop_dialect?.digits[idx];
 
                 return (
-                  <tr key={idx} className="border-b border-zinc-900/50 hover:bg-zinc-900/30">
+                  <tr
+                    key={idx}
+                    className="border-b border-zinc-900/50 hover:bg-zinc-900/30"
+                  >
                     <td className="py-1.5 pr-3 font-bold text-amber-400">{charStr}</td>
                     <td className="py-1.5 px-3 text-zinc-400">{asciiVal}</td>
-                    <td className="py-1.5 px-3 text-emerald-400 font-semibold">{localDigit}</td>
+                    <td className="py-1.5 px-3 text-emerald-400 font-semibold">
+                      {localDigit}
+                    </td>
                     <td className="py-1.5 pl-3 text-right font-mono font-semibold text-sky-400">
-                      {isDestination ? toPrintableChar(asciiVal) : nextDigit ?? "—"}
+                      {isDestination ? toPrintableChar(asciiVal) : (nextDigit ?? "—")}
                     </td>
                   </tr>
                 );
@@ -150,9 +166,19 @@ export default function CodexTerminal({ hopLog }: CodexTerminalProps) {
 
         {/* Hop Stats */}
         <div className="mt-1 flex items-center justify-between text-[10px] text-zinc-500">
-          <span>TOWERS HIT: {currentHop.towers_hit}x (delay: {currentHop.internal_latency_ms.toFixed(1)}ms)</span>
-          <span>VOID PROPAGATION: {currentHop.void_latency_ms !== undefined ? `${currentHop.void_latency_ms.toFixed(2)}ms` : "N/A"}</span>
-          <span className="text-emerald-400 font-bold">CUMULATIVE: {currentHop.cumulative_latency_ms.toFixed(3)} ms</span>
+          <span>
+            TOWERS HIT: {currentHop.towers_hit}x (delay:{" "}
+            {currentHop.internal_latency_ms.toFixed(1)}ms)
+          </span>
+          <span>
+            VOID PROPAGATION:{" "}
+            {currentHop.void_latency_ms !== undefined
+              ? `${currentHop.void_latency_ms.toFixed(2)}ms`
+              : "N/A"}
+          </span>
+          <span className="text-emerald-400 font-bold">
+            CUMULATIVE: {currentHop.cumulative_latency_ms.toFixed(3)} ms
+          </span>
         </div>
       </div>
     </div>
