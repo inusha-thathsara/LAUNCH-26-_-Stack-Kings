@@ -1,37 +1,12 @@
-import { transmit } from "@/lib/relic/transmission";
-import type { RouteOptions } from "@/lib/relic/router";
+import { apiErrorResponse } from "@/lib/api/errors";
+import { handleApiRoute } from "@/lib/api/route-handler";
+import { validateTransmitBody } from "@/lib/api/validate-transmit";
+import { captureApiError } from "@/lib/observability/sentry";
+import { RelicConfigError } from "@/lib/relic/config";
 import { getEngine } from "@/lib/relic/server/universe";
+import { transmit } from "@/lib/relic/transmission";
 
 export const runtime = "nodejs";
-
-interface TransmitBody {
-  origin?: unknown;
-  destination?: unknown;
-  payload?: unknown;
-  blockedNodes?: unknown;
-  blockedEdges?: unknown;
-}
-
-function asStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string");
-}
-
-function asEdgeList(value: unknown): Array<[string, string]> {
-  if (!Array.isArray(value)) return [];
-  const edges: Array<[string, string]> = [];
-  for (const item of value) {
-    if (
-      Array.isArray(item) &&
-      item.length === 2 &&
-      typeof item[0] === "string" &&
-      typeof item[1] === "string"
-    ) {
-      edges.push([item[0], item[1]]);
-    }
-  }
-  return edges;
-}
 
 /**
  * M2/M3/M4 - Transmit a payload from origin to destination, optionally with
@@ -39,42 +14,50 @@ function asEdgeList(value: unknown): Array<[string, string]> {
  * latency breakdown, and the reconstructed payload.
  */
 export async function POST(request: Request) {
-  try {
-    const body = (await request.json()) as TransmitBody;
-    const origin = body.origin;
-    const destination = body.destination;
-    const payload = body.payload;
-
-    if (
-      typeof origin !== "string" ||
-      typeof destination !== "string" ||
-      typeof payload !== "string"
-    ) {
-      return Response.json(
-        { error: "origin, destination, and payload are required strings." },
-        { status: 400 },
+  return handleApiRoute("/api/transmit", "POST", async () => {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return apiErrorResponse(
+        400,
+        "INVALID_JSON",
+        "Request body must be valid JSON.",
       );
     }
 
-    const options: RouteOptions = {
-      blockedNodes: asStringArray(body.blockedNodes),
-      blockedEdges: asEdgeList(body.blockedEdges),
-    };
+    const validated = validateTransmitBody(body);
+    if (!validated.ok) {
+      return Response.json(validated.body, { status: validated.status });
+    }
 
-    const { universe, geometry, codec } = getEngine();
-    const result = transmit(
-      universe,
-      geometry,
-      codec,
-      origin,
-      destination,
-      payload,
-      options,
-    );
+    const { origin, destination, payload, options } = validated.data;
 
-    return Response.json(result);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return Response.json({ error: message }, { status: 400 });
-  }
+    try {
+      const { universe, geometry, codec } = getEngine();
+      const result = transmit(
+        universe,
+        geometry,
+        codec,
+        origin,
+        destination,
+        payload,
+        options,
+      );
+      return Response.json(result);
+    } catch (error) {
+      captureApiError(error, { route: "/api/transmit", origin, destination });
+      if (error instanceof RelicConfigError) {
+        return apiErrorResponse(500, "ENGINE_ERROR", error.message);
+      }
+      const message = error instanceof Error ? error.message : "Unknown error";
+      if (
+        message.startsWith("Unknown origin") ||
+        message.startsWith("Unknown destination")
+      ) {
+        return apiErrorResponse(400, "VALIDATION_ERROR", message);
+      }
+      return apiErrorResponse(500, "ENGINE_ERROR", message);
+    }
+  });
 }

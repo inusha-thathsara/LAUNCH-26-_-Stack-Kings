@@ -69,17 +69,23 @@ npm run relic -- send Aegis Caelum "Hello world" --kill Dawn --cut Aegis-Boreas
 
 ### HTTP API
 
-- `GET /api/universe` — **M1**: metadata, nodes, adjacency, and the within-Lmax edges.
-- `POST /api/transmit` — **M2/M3/M4**:
+- `GET /api/health` — liveness probe (version, config path/hash, engine status).
+- `GET /api/universe` — **M1**: metadata, nodes, adjacency, and the within-Lmax edges (cached 1 h).
+- `POST /api/transmit` — **M2/M3/M4** (payload capped at 10 KB; structured error codes):
 
 ```bash
+curl http://localhost:3000/api/health
+
 curl -X POST http://localhost:3000/api/transmit \
   -H "Content-Type: application/json" \
   -d '{"origin":"Aegis","destination":"Caelum","payload":"Hello world","blockedNodes":["Dawn"]}'
 ```
 
 Returns the `packet` (with `hop_log`), the `route` (path + latency breakdown), and
-the reconstructed `delivered_payload`.
+the reconstructed `delivered_payload`. API routes are rate-limited (120 req/min per client).
+
+**Config override:** set `UNIVERSE_CONFIG_PATH` to point at an alternate
+`universe-config.json` before starting the server or container.
 
 ---
 
@@ -238,8 +244,43 @@ No other file needs to change to swap a module.
 
 ---
 
+## Deployment
+
+### Vercel (recommended)
+
+1. Import the GitHub repo in [Vercel](https://vercel.com).
+2. Framework is auto-detected (Next.js). `vercel.json` is included.
+3. Copy [`.env.example`](.env.example) variables into the Vercel project settings as needed.
+4. Deploy — `/relic` is the demo surface; `/api/health` is the liveness probe.
+
+**GitHub Actions deploy:** add repository secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and
+`VERCEL_PROJECT_ID`. Pushes to `main` then run [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
+automatically (skipped when secrets are absent).
+
+### Docker
+
+```bash
+docker build -t relic-ring .
+docker run --rm -p 3000:3000 relic-ring
+curl http://localhost:3000/api/health
+```
+
+---
+
+## Observability
+
+- **Structured API logs:** every `/api/*` request emits a single-line JSON log
+  (`route`, `method`, `status`, `duration_ms`) via [`src/lib/api/logging.ts`](src/lib/api/logging.ts).
+- **Health probe:** `GET /api/health` returns `version`, `config_path`, `config_hash`, and
+  `engine_loaded` for deploy verification.
+- **Sentry (optional):** set `SENTRY_DSN` (server) and `NEXT_PUBLIC_SENTRY_DSN` (browser).
+  When unset, Sentry is fully disabled — no account required for local dev.
+- **Error boundaries:** `global-error.tsx` and the dashboard error boundary capture UI failures.
+
+---
+
 ## Tech stack
 
-Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind CSS · Vitest · tsx
+Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind CSS · Vitest · tsx · Sentry
 
 We are continuously improving this project through teamwork, innovation, and community feedback.

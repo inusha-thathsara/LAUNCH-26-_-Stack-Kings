@@ -7,11 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "relic": "tsx src/cli/relic.ts"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.63.0",
     "next": "16.2.9",
     "react": "19.2.4",
     "react-dom": "19.2.4"
