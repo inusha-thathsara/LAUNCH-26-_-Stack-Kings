@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+
+import SentryClientInit from "@/components/observability/SentryClientInit";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,10 +15,30 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteDescription =
+  "Relic Ring Protocol — low-latency routing simulation across the Zeta-26 star system. Stack Kings, LAUNCH 26.";
+
 export const metadata: Metadata = {
-  title: "Stack Kings — LAUNCH 26",
-  description:
-    "A sample Next.js application for the LAUNCH 26 Stack Kings project.",
+  title: {
+    default: "Relic Ring Protocol — Stack Kings",
+    template: "%s | Relic Ring Protocol",
+  },
+  description: siteDescription,
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://relic.inusha.me"),
+  openGraph: {
+    title: "Relic Ring Protocol — Stack Kings",
+    description: siteDescription,
+    type: "website",
+    siteName: "Relic Ring Protocol",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Relic Ring Protocol — Stack Kings",
+    description: siteDescription,
+  },
+  icons: {
+    icon: "/icon",
+  },
 };
 
 export default function RootLayout({
@@ -28,7 +51,10 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <SentryClientInit />
+        {children}
+      </body>
     </html>
   );
 }

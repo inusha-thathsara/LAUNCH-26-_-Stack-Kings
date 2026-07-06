@@ -52,8 +52,7 @@ function printResult(label: string, result: TransmissionResult): void {
   console.log(`Delivered payload: ${JSON.stringify(delivered_payload)}`);
   console.log("hop_log:");
   for (const hop of packet.hop_log) {
-    const tv =
-      hop.void_latency_ms !== undefined ? fmt(hop.void_latency_ms) : "-";
+    const tv = hop.void_latency_ms !== undefined ? fmt(hop.void_latency_ms) : "-";
     console.log(
       `  [${hop.sequence}] ${hop.planet_id} base${hop.codex} ` +
         `tower ${hop.entry_tower}->${hop.exit_tower} s=${hop.segments} m=${hop.towers_hit} ` +
@@ -100,7 +99,7 @@ function main(): void {
     const payload = argv[3] ?? "Hello world";
     if (!origin || !destination) {
       console.error(
-        'usage: send <origin> <destination> [payload] [--kill A,B] [--cut A-B,C-D]',
+        "usage: send <origin> <destination> [payload] [--kill A,B] [--cut A-B,C-D]",
       );
       process.exit(1);
     }
@@ -123,8 +122,8 @@ function main(): void {
   if (command === "demo") {
     printUniverse(engine);
     const nodes = engine.universe.nodes;
-    const origin = nodes[0].id;
-    const destination = nodes[nodes.length - 1].id;
+    const origin = nodes[0]!.id;
+    const destination = nodes[nodes.length - 1]!.id;
 
     const first = engine.network.send(origin, destination, "Hello world");
     printResult(`M2/M3: ${origin} -> ${destination}`, first);

@@ -22,7 +22,9 @@ export default function LatencyMetrics({
   const total = breakdown?.total_ms || 1;
   const fiberPct = breakdown ? ((breakdown.fiber_ms / total) * 100).toFixed(1) : "0";
   const towerPct = breakdown ? ((breakdown.tower_ms / total) * 100).toFixed(1) : "0";
-  const atmosPct = breakdown ? ((breakdown.atmosphere_ms / total) * 100).toFixed(1) : "0";
+  const atmosPct = breakdown
+    ? ((breakdown.atmosphere_ms / total) * 100).toFixed(1)
+    : "0";
   const voidPct = breakdown ? ((breakdown.void_ms / total) * 100).toFixed(1) : "0";
 
   return (
@@ -47,8 +49,8 @@ export default function LatencyMetrics({
             isDelivered
               ? "bg-emerald-500/10"
               : isUndeliverable
-              ? "bg-red-500/10"
-              : "bg-zinc-500/10"
+                ? "bg-red-500/10"
+                : "bg-zinc-500/10"
           }`}
         ></div>
 
@@ -59,12 +61,13 @@ export default function LatencyMetrics({
             </span>
             <div className="flex items-center gap-2">
               <span
+                data-testid="transmission-status"
                 className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider ${
                   isDelivered
                     ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                     : isUndeliverable
-                    ? "bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse"
-                    : "bg-zinc-800 text-zinc-400 border border-white/5"
+                      ? "bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse"
+                      : "bg-zinc-800 text-zinc-400 border border-white/5"
                 }`}
               >
                 {status}
@@ -76,14 +79,20 @@ export default function LatencyMetrics({
             <span className="text-[9px] uppercase tracking-widest text-zinc-500">
               End-to-End Latency
             </span>
-            <span className="font-mono text-2xl font-black tracking-tight text-white">
+            <span
+              data-testid="total-latency-ms"
+              className="font-mono text-2xl font-black tracking-tight text-white"
+            >
               {isDelivered ? `${totalLatency.toFixed(3)} ms` : "0.000 ms"}
             </span>
           </div>
         </div>
 
         {isUndeliverable && undeliverableReason && (
-          <div className="mt-3 rounded-lg border border-red-500/30 bg-red-950/20 px-3 py-2 text-xs text-red-300 font-mono">
+          <div
+            data-testid="undeliverable-reason"
+            className="mt-3 rounded-lg border border-red-500/30 bg-red-950/20 px-3 py-2 text-xs text-red-300 font-mono"
+          >
             ⚠️ ERROR: {undeliverableReason}
           </div>
         )}
@@ -134,7 +143,9 @@ export default function LatencyMetrics({
             {/* Atmospheric Refraction Delay */}
             <div className="flex flex-col gap-2 rounded-xl border border-white/5 bg-zinc-950/40 p-3.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-zinc-300">Atmospheric Refraction</span>
+                <span className="font-semibold text-zinc-300">
+                  Atmospheric Refraction
+                </span>
                 <span className="font-mono font-bold text-purple-400">
                   {breakdown.atmosphere_ms.toFixed(3)} ms ({atmosPct}%)
                 </span>

@@ -52,8 +52,8 @@ export function buildNetworkGraph(
   const edges: VoidEdge[] = [];
   for (let i = 0; i < nodes.length; i += 1) {
     for (let j = i + 1; j < nodes.length; j += 1) {
-      const a = nodes[i];
-      const b = nodes[j];
+      const a = nodes[i]!;
+      const b = nodes[j]!;
       const voidDistanceKm = geometry.voidDistanceKm(a, b);
       const withinLmax = voidDistanceKm <= lmax;
 
