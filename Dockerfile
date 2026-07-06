@@ -24,8 +24,9 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
-# The protocol parses this at runtime from the working directory.
-COPY --from=builder --chown=node:node /app/universe-config.json ./universe-config.json
+# Copy the challenge configuration folders so they are resolved dynamically at runtime.
+COPY --from=builder --chown=node:node "/app/challenge p1" "./challenge p1"
+COPY --from=builder --chown=node:node "/app/challenge p2" "./challenge p2"
 
 USER node
 

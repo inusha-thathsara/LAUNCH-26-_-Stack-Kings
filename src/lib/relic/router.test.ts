@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { parseUniverseConfig } from "./config";
 import { findShortestRoute } from "./router";
+import { universeConfigPath } from "./server/universe";
 import { createStubGeometryProvider } from "./stubs/geometry.stub";
 import type { PlanetNode, Universe, UniverseMetadata } from "./types";
 
@@ -128,9 +129,7 @@ describe("findShortestRoute", () => {
   });
 
   it("routes across the real Zeta-26 universe", () => {
-    const raw = JSON.parse(
-      readFileSync(join(process.cwd(), "universe-config.json"), "utf8"),
-    );
+    const raw = JSON.parse(readFileSync(universeConfigPath(), "utf8"));
     const real = parseUniverseConfig(raw);
     const realGeometry = createStubGeometryProvider(real.metadata);
 

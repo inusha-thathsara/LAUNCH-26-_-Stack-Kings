@@ -9,6 +9,7 @@ import {
   parseUniverseConfig,
   RelicConfigError,
 } from "./config";
+import { universeConfigPath } from "./server/universe";
 
 /** Minimal valid metadata used as a base for targeted mutations. */
 function validMetadata() {
@@ -46,9 +47,7 @@ function validConfig() {
 
 describe("parseUniverseConfig", () => {
   it("parses the real universe-config.json from the repo root", () => {
-    const raw = JSON.parse(
-      readFileSync(join(process.cwd(), "universe-config.json"), "utf8"),
-    );
+    const raw = JSON.parse(readFileSync(universeConfigPath(), "utf8"));
 
     const universe = parseUniverseConfig(raw);
 
@@ -154,11 +153,8 @@ describe("parseUniverseConfig", () => {
 
   it("rejects a non-positive coordinate scale", () => {
     const config = validConfig();
-    (config.universe_metadata as Record<string, unknown>).coordinate_scale_unit_km =
-      -1;
-    expect(() => parseUniverseConfig(config)).toThrow(
-      /coordinate_scale_unit_km/,
-    );
+    (config.universe_metadata as Record<string, unknown>).coordinate_scale_unit_km = -1;
+    expect(() => parseUniverseConfig(config)).toThrow(/coordinate_scale_unit_km/);
   });
 
   it("allows zero atmosphere thickness", () => {
