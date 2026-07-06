@@ -45,3 +45,4 @@ next-env.d.ts
 
 # Sentry Config File
 .env.sentry-build-plugin
+/challenge p2/phase_2_plan.md

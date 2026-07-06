@@ -26,7 +26,7 @@
       "radius_km": 3389.0,
       "active_towers": 4,
       "atmosphere_thickness_km": 85.0,
-      "refraction_index": 1.0520
+      "refraction_index": 1.052
     },
     {
       "id": "Dawn",
@@ -36,7 +36,7 @@
       "radius_km": 1500.0,
       "active_towers": 6,
       "atmosphere_thickness_km": 30.0,
-      "refraction_index": 1.0110
+      "refraction_index": 1.011
     },
     {
       "id": "Elysium",
@@ -46,7 +46,7 @@
       "radius_km": 6051.0,
       "active_towers": 12,
       "atmosphere_thickness_km": 250.0,
-      "refraction_index": 1.1850
+      "refraction_index": 1.185
     },
     {
       "id": "Fenix",
@@ -56,7 +56,7 @@
       "radius_km": 1200.0,
       "active_towers": 4,
       "atmosphere_thickness_km": 15.0,
-      "refraction_index": 1.0050
+      "refraction_index": 1.005
     },
     {
       "id": "Caelum",
@@ -66,7 +66,7 @@
       "radius_km": 58232.0,
       "active_towers": 16,
       "atmosphere_thickness_km": 500.0,
-      "refraction_index": 1.3210
+      "refraction_index": 1.321
     }
   ]
 }

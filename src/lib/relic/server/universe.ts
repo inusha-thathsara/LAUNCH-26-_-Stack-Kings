@@ -7,7 +7,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { createEngine, type Engine } from "../engine";
@@ -22,6 +22,19 @@ export function universeConfigPath(): string {
   if (configured && configured.trim().length > 0) {
     return configured;
   }
+
+  const candidatePaths = [
+    join(process.cwd(), "challenge p2/universe-config.json"),
+    join(process.cwd(), "challenge p1/universe-config.json"),
+    join(process.cwd(), "universe-config.json"),
+  ];
+
+  for (const candidate of candidatePaths) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
   return join(process.cwd(), "universe-config.json");
 }
 
