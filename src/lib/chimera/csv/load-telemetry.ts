@@ -1,3 +1,5 @@
+import { readFileSync, existsSync } from "node:fs";
+
 /**
  * CSV loader for `link_telemetry.csv`.
  *
@@ -11,8 +13,6 @@
  *  - Flag systematic under-reporting (Chimera spoofing) vs honest noise
  */
 
-// TODO (Ruwan — Phase 1): implement telemetry CSV loader
-
 export interface TelemetryRow {
   link_id: string;
   tick: number;
@@ -21,6 +21,34 @@ export interface TelemetryRow {
 }
 
 /** Load and parse link_telemetry.csv from the given file path. */
-export function loadTelemetry(_csvPath: string): TelemetryRow[] {
-  throw new Error("loadTelemetry() not yet implemented — Phase 1 task.");
+export function loadTelemetry(csvPath: string): TelemetryRow[] {
+  if (!existsSync(csvPath)) {
+    throw new Error(`Telemetry file does not exist at: ${csvPath}`);
+  }
+
+  const content = readFileSync(csvPath, "utf8");
+  const lines = content.split(/\r?\n/);
+  const rows: TelemetryRow[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i]?.trim();
+    if (!line) continue;
+
+    const parts = line.split(",");
+    if (parts.length < 4) continue;
+
+    const link_id = parts[0]!.trim();
+    const tick = parseInt(parts[1]!.trim(), 10);
+    const self_reported_latency_ms = parseFloat(parts[2]!.trim());
+    const measured_latency_ms = parseFloat(parts[3]!.trim());
+
+    rows.push({
+      link_id,
+      tick,
+      self_reported_latency_ms,
+      measured_latency_ms,
+    });
+  }
+
+  return rows;
 }
