@@ -6,7 +6,13 @@
  * values the spec marks as defaultable.
  */
 
-import type { PlanetNode, Universe, UniverseMetadata } from "./types";
+import type {
+  InterplanetaryLink,
+  PlanetNode,
+  Universe,
+  UniverseMetadata,
+} from "./types";
+import { canonicalLinkId } from "../chimera/link-id";
 
 /** Documented defaults for the optional metadata constants. */
 export const METADATA_DEFAULTS = {
@@ -85,9 +91,7 @@ function describe(value: unknown): string {
 
 function parseMetadata(raw: unknown): UniverseMetadata {
   if (!isObject(raw)) {
-    throw new RelicConfigError(
-      'Config: "universe_metadata" must be an object.',
-    );
+    throw new RelicConfigError('Config: "universe_metadata" must be an object.');
   }
   const context = "universe_metadata";
   const coordinate_scale_unit_km = requireFiniteNumber(
@@ -213,6 +217,57 @@ function parseNode(raw: unknown, index: number): PlanetNode {
 }
 
 /**
+ * Parse a single interplanetary link entry, validating its structure and
+ * cross-checking the link_id against the canonical alphabetical convention.
+ */
+function parseInterplanetaryLink(
+  raw: unknown,
+  index: number,
+  nodesById: Map<string, PlanetNode>,
+): InterplanetaryLink {
+  if (!isObject(raw)) {
+    throw new RelicConfigError(`interplanetary_links[${index}]: must be an object.`);
+  }
+  const context = `interplanetary_links[${index}]`;
+
+  const planet_a = requireNonEmptyString(raw, "planet_a", context);
+  const planet_b = requireNonEmptyString(raw, "planet_b", context);
+
+  if (!nodesById.has(planet_a)) {
+    throw new RelicConfigError(
+      `${context}: "planet_a" references unknown node "${planet_a}".`,
+    );
+  }
+  if (!nodesById.has(planet_b)) {
+    throw new RelicConfigError(
+      `${context}: "planet_b" references unknown node "${planet_b}".`,
+    );
+  }
+  if (planet_a === planet_b) {
+    throw new RelicConfigError(
+      `${context}: "planet_a" and "planet_b" must be different planets.`,
+    );
+  }
+
+  const expectedLinkId = canonicalLinkId(planet_a, planet_b);
+  const link_id = requireNonEmptyString(raw, "link_id", context);
+  if (link_id !== expectedLinkId) {
+    throw new RelicConfigError(
+      `${context}: "link_id" must be "${expectedLinkId}" (alphabetical), received "${link_id}".`,
+    );
+  }
+
+  const capacity_units = requireFiniteNumber(raw, "capacity_units", context);
+  if (capacity_units <= 0) {
+    throw new RelicConfigError(
+      `${context}: "capacity_units" must be greater than 0, received ${capacity_units}.`,
+    );
+  }
+
+  return { link_id, planet_a, planet_b, capacity_units };
+}
+
+/**
  * Parse and validate a raw universe configuration object.
  * @throws {RelicConfigError} when the structure or any value is invalid.
  */
@@ -224,9 +279,7 @@ export function parseUniverseConfig(raw: unknown): Universe {
   const metadata = parseMetadata(raw.universe_metadata);
 
   if (!Array.isArray(raw.nodes) || raw.nodes.length === 0) {
-    throw new RelicConfigError(
-      'Config: "nodes" must be a non-empty array.',
-    );
+    throw new RelicConfigError('Config: "nodes" must be a non-empty array.');
   }
 
   const nodes = raw.nodes.map((node, index) => parseNode(node, index));
@@ -234,12 +287,34 @@ export function parseUniverseConfig(raw: unknown): Universe {
   const nodesById = new Map<string, PlanetNode>();
   for (const node of nodes) {
     if (nodesById.has(node.id)) {
-      throw new RelicConfigError(
-        `Config: duplicate node id "${node.id}".`,
-      );
+      throw new RelicConfigError(`Config: duplicate node id "${node.id}".`);
     }
     nodesById.set(node.id, node);
   }
 
-  return { metadata, nodes, nodesById };
+  // Phase 2: parse optional interplanetary_links (backward-compatible)
+  const interplanetaryLinks: InterplanetaryLink[] = [];
+  const linksById = new Map<string, InterplanetaryLink>();
+
+  if (Array.isArray(raw.interplanetary_links)) {
+    for (let i = 0; i < raw.interplanetary_links.length; i++) {
+      const link = parseInterplanetaryLink(raw.interplanetary_links[i], i, nodesById);
+      if (linksById.has(link.link_id)) {
+        throw new RelicConfigError(
+          `Config: duplicate interplanetary link "${link.link_id}".`,
+        );
+      }
+      interplanetaryLinks.push(link);
+      linksById.set(link.link_id, link);
+    }
+  } else if (
+    raw.interplanetary_links !== undefined &&
+    raw.interplanetary_links !== null
+  ) {
+    throw new RelicConfigError(
+      'Config: "interplanetary_links" must be an array when present.',
+    );
+  }
+
+  return { metadata, nodes, nodesById, interplanetaryLinks, linksById };
 }

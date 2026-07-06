@@ -165,3 +165,117 @@ describe("parseUniverseConfig", () => {
     expect(() => parseUniverseConfig(config)).not.toThrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 2 — interplanetary_links parsing
+// ---------------------------------------------------------------------------
+
+describe("parseUniverseConfig — interplanetary_links", () => {
+  it("parses all 12 links from the real Phase 2 universe-config.json", () => {
+    const raw = JSON.parse(readFileSync(universeConfigPath(), "utf8"));
+    const universe = parseUniverseConfig(raw);
+
+    expect(universe.interplanetaryLinks).toHaveLength(12);
+    expect(universe.linksById.size).toBe(12);
+  });
+
+  it("builds a linksById map with alphabetical link_id keys", () => {
+    const raw = JSON.parse(readFileSync(universeConfigPath(), "utf8"));
+    const universe = parseUniverseConfig(raw);
+
+    // Spot-check a known link from the config
+    const link = universe.linksById.get("Aegis-Boreas");
+    expect(link).toBeDefined();
+    expect(link?.planet_a).toBe("Aegis");
+    expect(link?.planet_b).toBe("Boreas");
+    expect(link?.capacity_units).toBe(208);
+  });
+
+  it("is backward-compatible: missing interplanetary_links → empty arrays", () => {
+    const universe = parseUniverseConfig(validConfig());
+    expect(universe.interplanetaryLinks).toHaveLength(0);
+    expect(universe.linksById.size).toBe(0);
+  });
+
+  it("rejects a non-array interplanetary_links value", () => {
+    const config = {
+      ...validConfig(),
+      interplanetary_links: "not-an-array",
+    };
+    expect(() => parseUniverseConfig(config)).toThrow(/must be an array/);
+  });
+
+  it("rejects a link with an unknown planet", () => {
+    const config = {
+      ...validConfig(),
+      interplanetary_links: [
+        {
+          link_id: "Aegis-Unknown",
+          planet_a: "Aegis",
+          planet_b: "Unknown",
+          capacity_units: 100,
+        },
+      ],
+    };
+    expect(() => parseUniverseConfig(config)).toThrow(/unknown node/);
+  });
+
+  it("rejects a link where planet_a === planet_b", () => {
+    const config = {
+      ...validConfig(),
+      interplanetary_links: [
+        {
+          link_id: "Aegis-Aegis",
+          planet_a: "Aegis",
+          planet_b: "Aegis",
+          capacity_units: 100,
+        },
+      ],
+    };
+    expect(() => parseUniverseConfig(config)).toThrow();
+  });
+
+  it("rejects a link_id that is not in alphabetical order", () => {
+    const config = {
+      ...validConfig(),
+      interplanetary_links: [
+        {
+          link_id: "Boreas-Aegis",
+          planet_a: "Aegis",
+          planet_b: "Boreas",
+          capacity_units: 100,
+        },
+      ],
+    };
+    expect(() => parseUniverseConfig(config)).toThrow(/alphabetical/);
+  });
+
+  it("rejects a link with non-positive capacity_units", () => {
+    const config = {
+      ...validConfig(),
+      interplanetary_links: [
+        {
+          link_id: "Aegis-Boreas",
+          planet_a: "Aegis",
+          planet_b: "Boreas",
+          capacity_units: 0,
+        },
+      ],
+    };
+    expect(() => parseUniverseConfig(config)).toThrow(/capacity_units/);
+  });
+
+  it("rejects duplicate link_id entries", () => {
+    const dup = {
+      link_id: "Aegis-Boreas",
+      planet_a: "Aegis",
+      planet_b: "Boreas",
+      capacity_units: 100,
+    };
+    const config = {
+      ...validConfig(),
+      interplanetary_links: [dup, dup],
+    };
+    expect(() => parseUniverseConfig(config)).toThrow(/duplicate/);
+  });
+});
