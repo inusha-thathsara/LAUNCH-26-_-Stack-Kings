@@ -60,6 +60,7 @@ export async function routeWithCopilot(
   const blockedEdges = new Set<string>();
   const path: string[] = [intent.origin_id];
   const evaluations: LinkEvaluation[] = [];
+  const anomalies: string[] = [];
   let reroutes = 0;
   let current = intent.origin_id;
 
@@ -102,6 +103,10 @@ export async function routeWithCopilot(
       continue;
     }
 
+    if (scored.anomaly && scored.anomalyReason) {
+      anomalies.push(`${scored.evaluation.link_id} (${scored.anomalyReason})`);
+    }
+
     evaluations.push(scored.evaluation);
     current = next;
     path.push(current);
@@ -129,6 +134,9 @@ export async function routeWithCopilot(
     congested.length > 0
       ? `Congestion penalties applied on ${congested.map((evaluation) => evaluation.link_id).join(", ")}.`
       : "No significant congestion penalties on the final path.",
+    anomalies.length > 0
+      ? `Anomaly detected on ${anomalies.join(", ")}; routing conservatively (low trust, high risk) on out-of-distribution telemetry.`
+      : "All link telemetry was within expected distribution.",
   ];
 
   return buildRoutingReport({

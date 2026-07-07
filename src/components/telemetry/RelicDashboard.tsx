@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   PlanetNode,
   UniverseMetadata,
@@ -46,6 +46,13 @@ export default function RelicDashboard({ appVersion }: RelicDashboardProps) {
   const [routingLoading, setRoutingLoading] = useState(false);
   const [routingError, setRoutingError] = useState<string | null>(null);
   const [pathView, setPathView] = useState<PathViewMode>("chosen");
+
+  // Phase 5 — live chaos pivot monitoring
+  const [liveMonitor, setLiveMonitor] = useState(false);
+  const [pivotNotice, setPivotNotice] = useState<string | null>(null);
+  const [pollCount, setPollCount] = useState(0);
+  const lastPathRef = useRef<string | null>(null);
+  const pollInFlightRef = useRef(false);
 
   const baselinePath = useMemo(
     () =>
@@ -178,6 +185,7 @@ export default function RelicDashboard({ appVersion }: RelicDashboardProps) {
           payload,
           blockedNodes: [...deadNodes],
           blockedEdges,
+          use_copilot: routingReport !== null,
         }),
       });
       const data = await res.json();
@@ -188,34 +196,83 @@ export default function RelicDashboard({ appVersion }: RelicDashboardProps) {
     } finally {
       setSending(false);
     }
-  }, [origin, destination, payload, deadNodes, deadLinks]);
+  }, [origin, destination, payload, deadNodes, deadLinks, routingReport]);
 
-  const routeWithCopilot = useCallback(async () => {
-    const trimmed = nlRequest.trim();
-    if (!trimmed) return;
-    setRoutingLoading(true);
-    setRoutingError(null);
-    setRoutingReport(null);
-    setPathView("chosen");
-    try {
-      const res = await fetch("/api/route", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ request: trimmed }),
-      });
-      const data = (await res.json()) as Phase2RoutingReport & { error?: string };
-      if (!res.ok) {
-        throw new Error(data.error ?? "Co-Pilot routing failed");
+  const routeWithCopilot = useCallback(
+    async (options?: { refresh?: boolean }) => {
+      const trimmed = nlRequest.trim();
+      if (!trimmed || pollInFlightRef.current) return;
+
+      const isRefresh = options?.refresh ?? false;
+      pollInFlightRef.current = true;
+
+      if (!isRefresh) {
+        setRoutingLoading(true);
+        setRoutingError(null);
+        setRoutingReport(null);
+        setPathView("chosen");
+        lastPathRef.current = null;
       }
-      setRoutingReport(data);
-      setOrigin(data.origin_id);
-      setDestination(data.destination_id);
-    } catch (error: unknown) {
-      setRoutingError(error instanceof Error ? error.message : "Unknown error");
-    } finally {
-      setRoutingLoading(false);
-    }
-  }, [nlRequest]);
+
+      try {
+        const res = await fetch("/api/route", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ request: trimmed }),
+        });
+        const data = (await res.json()) as Phase2RoutingReport & { error?: string };
+        if (!res.ok) {
+          throw new Error(data.error ?? "Co-Pilot routing failed");
+        }
+
+        const newPath = data.chosen_path.join(" → ");
+        if (lastPathRef.current && lastPathRef.current !== newPath) {
+          setPivotNotice(`Path pivoted: ${lastPathRef.current}  ➜  ${newPath}`);
+        }
+        lastPathRef.current = newPath;
+
+        setRoutingReport(data);
+        setOrigin(data.origin_id);
+        setDestination(data.destination_id);
+        if (isRefresh) {
+          setRoutingError(null);
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        if (isRefresh) {
+          // Keep the last good report visible during live monitoring glitches.
+          setPivotNotice(`Live re-route failed: ${message}`);
+        } else {
+          setRoutingError(message);
+        }
+      } finally {
+        pollInFlightRef.current = false;
+        if (!isRefresh) {
+          setRoutingLoading(false);
+        }
+      }
+    },
+    [nlRequest],
+  );
+
+  // Live chaos pivot: re-poll the Co-Pilot on an interval and surface path changes.
+  // Does NOT depend on routingReport — clearing the report during refresh would stop polling.
+  useEffect(() => {
+    if (!liveMonitor) return;
+    const handle = setInterval(() => {
+      if (!lastPathRef.current) return;
+      setPollCount((n) => n + 1);
+      void routeWithCopilot({ refresh: true });
+    }, 4000);
+    return () => clearInterval(handle);
+  }, [liveMonitor, routeWithCopilot]);
+
+  // Auto-dismiss the pivot banner a few seconds after it appears.
+  useEffect(() => {
+    if (!pivotNotice) return;
+    const handle = setTimeout(() => setPivotNotice(null), 6000);
+    return () => clearTimeout(handle);
+  }, [pivotNotice]);
 
   // Debounced auto-trigger for a reactive simulation experience.
   // a timeout keeps the setState calls out of the synchronous effect body and
@@ -484,6 +541,26 @@ export default function RelicDashboard({ appVersion }: RelicDashboardProps) {
                 >
                   {routingLoading ? "Co-Pilot routing..." : "Route with Co-Pilot"}
                 </button>
+                <button
+                  type="button"
+                  data-testid="live-monitor-toggle"
+                  onClick={() => setLiveMonitor((v) => !v)}
+                  disabled={!routingReport}
+                  className={`flex items-center justify-center gap-2 rounded-lg py-2 text-[11px] font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500 ${
+                    liveMonitor
+                      ? "bg-red-950/60 border border-red-500/40 text-red-300"
+                      : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+                  }`}
+                >
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      liveMonitor ? "animate-pulse bg-red-400" : "bg-zinc-500"
+                    }`}
+                  ></span>
+                  {liveMonitor
+                    ? `Live Monitor ON · ${pollCount}`
+                    : "Live Chaos Monitor"}
+                </button>
               </div>
 
               <div className="h-px bg-white/10 my-1"></div>
@@ -550,6 +627,17 @@ export default function RelicDashboard({ appVersion }: RelicDashboardProps) {
                   className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300"
                 >
                   {sendError ?? routingError}
+                </div>
+              )}
+
+              {pivotNotice && (
+                <div
+                  data-testid="pivot-notice"
+                  role="status"
+                  className="flex items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 shadow-lg animate-pulse"
+                >
+                  <span className="text-lg">⚡</span>
+                  <span className="font-mono text-xs">{pivotNotice}</span>
                 </div>
               )}
 

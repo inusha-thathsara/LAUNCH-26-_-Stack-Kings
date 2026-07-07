@@ -35,6 +35,10 @@ export {
 } from "./health";
 export type { ChimeraHealthSnapshot } from "./health";
 
+// Link evaluation + anomaly detection (Phase 1 / Phase 5)
+export { evaluateLink, neutralLinkState, detectLinkAnomaly } from "./link-evaluation";
+export type { LinkScoreResult, AnomalyResult } from "./link-evaluation";
+
 // Strict output schema for the mandatory routing report (Phase 3)
 export {
   assertValidRoutingReport,

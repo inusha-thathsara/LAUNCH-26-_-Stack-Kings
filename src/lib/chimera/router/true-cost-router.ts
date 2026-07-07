@@ -25,7 +25,7 @@ import { getEngine } from "../../relic/server/universe";
 import type { LinkEvaluation, Phase2RoutingReport } from "../types";
 import { canonicalLinkId } from "../link-id";
 import { chimeraClient } from "../client";
-import { evaluateLink, neutralLinkState } from "../link-evaluation";
+import { detectLinkAnomaly, evaluateLink, neutralLinkState } from "../link-evaluation";
 import { ROUTE_DIVERSIFICATION_EPSILON } from "../constants";
 import {
   buildRoutingReport,
@@ -159,6 +159,17 @@ export async function routeWithTrueCost(
     .filter((evaluation) => evaluation.targeting_risk_score >= 0.5)
     .map((evaluation) => evaluation.link_id);
 
+  const anomalies: string[] = [];
+  for (const hop of chosen.route.hops) {
+    const linkId = canonicalLinkId(hop.from, hop.to);
+    const linkState = linkStateById.get(linkId);
+    if (!linkState) continue;
+    const anomaly = detectLinkAnomaly(linkState);
+    if (anomaly.anomalous) {
+      anomalies.push(`${linkId} (${anomaly.reasons.join("; ")})`);
+    }
+  }
+
   const explanationParts = [
     `True Cost route from ${options.origin_id} to ${options.destination_id}: ${formatPathExplanation(chosen.route.path)}.`,
     hardBlocked.size > 0
@@ -170,6 +181,9 @@ export async function routeWithTrueCost(
     riskyLinks.length > 0
       ? `Elevated targeting risk on: ${riskyLinks.join(", ")}.`
       : "Targeting risk remained moderate on all hops.",
+    anomalies.length > 0
+      ? `Anomaly detected on ${anomalies.join(", ")}; routed conservatively on out-of-distribution telemetry.`
+      : "All link telemetry was within expected distribution.",
   ];
   if (options.payload) {
     explanationParts.push(`Payload length: ${options.payload.length} characters.`);

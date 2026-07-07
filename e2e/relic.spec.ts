@@ -150,4 +150,31 @@ test.describe("Relic telemetry dashboard", () => {
     });
     await expect(page.getByTestId("copilot-explanation")).toBeVisible();
   });
+
+  test("live chaos monitor activates after a Co-Pilot route", async ({ page }) => {
+    await page.route("**/api/route", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(MOCK_ROUTING_REPORT),
+      });
+    });
+
+    await page.goto("/relic");
+
+    await expect(
+      page.getByRole("heading", { name: /Zeta-26 Telemetry Console/i }),
+    ).toBeVisible({ timeout: 15_000 });
+
+    // Live monitor is disabled until a route exists.
+    await expect(page.getByTestId("live-monitor-toggle")).toBeDisabled();
+
+    await page.getByTestId("copilot-route-button").click();
+    await expect(page.getByTestId("copilot-explanation")).toBeVisible();
+
+    await page.getByTestId("live-monitor-toggle").click();
+    await expect(page.getByTestId("live-monitor-toggle")).toContainText(
+      /live monitor on/i,
+    );
+  });
 });

@@ -25,3 +25,16 @@ export const PARSER_CONFIDENCE_THRESHOLD = 0.6;
  * the lowest aggregate targeting risk is preferred (entropy maximisation).
  */
 export const ROUTE_DIVERSIFICATION_EPSILON = 0.05;
+
+/**
+ * Conservative trust score assigned to a link whose live telemetry is
+ * out-of-distribution (anomalous). Caps trust so the True Cost router steers
+ * away from unfamiliar links while still keeping them usable as a last resort.
+ */
+export const ANOMALY_CONSERVATIVE_TRUST = 0.3;
+
+/**
+ * Conservative targeting-risk score assigned to an anomalous link. Floors the
+ * risk high so the router treats unseen vectors as likely jamming targets.
+ */
+export const ANOMALY_CONSERVATIVE_TARGETING = 0.85;
