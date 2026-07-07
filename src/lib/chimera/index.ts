@@ -24,7 +24,7 @@ export { routeWithCopilot } from "./agent/copilot";
 export { routeWithTrueCost } from "./router/true-cost-router";
 
 // Chimera API client (Inusha)
-export { ChimeraClient } from "./client";
+export { ChimeraClient, chimeraClient, getLastChimeraTick } from "./client";
 export type { ChimeraLinksResponse, ChimeraStateResponse } from "./client";
 
 // Analytical sub-model runtime APIs (Ruwan)
@@ -35,4 +35,10 @@ export { scoreTargetingRisk } from "./models/targeting";
 
 // NL Parser (Inusha)
 export { parseRoutingRequest } from "./parser/hybrid";
-export type { StructuredIntent } from "./parser/hybrid";
+export type { StructuredIntent, ParseOptions } from "./parser/hybrid";
+export {
+  createOllamaParser,
+  createGeminiParser,
+  resolveConfiguredLlm,
+} from "./parser/llm";
+export type { LlmParseFn } from "./parser/llm";

@@ -68,6 +68,11 @@ export interface RouteOptions {
   blockedNodes?: Iterable<string>;
   /** Undirected planet pairs treated as severed links. */
   blockedEdges?: Iterable<[string, string]>;
+  /**
+   * Extra void-hop cost (ms) added on top of physics void latency during
+   * Dijkstra relaxation. Used by the Chimera True Cost router; defaults to 0.
+   */
+  voidHopSurchargeMs?: (from: string, to: string, physicsVoidMs: number) => number;
 }
 
 const NO_ENTRY = -1;
@@ -296,8 +301,11 @@ export function findShortestRoute(
         metadata,
       );
       const voidLatency = computeVoidLatency(planet, neighbor, geometry, metadata);
+      const voidSurcharge =
+        options.voidHopSurchargeMs?.(planet.id, neighbor.id, voidLatency.total_ms) ?? 0;
 
-      const nextDist = current.dist + internal.total_ms + voidLatency.total_ms;
+      const nextDist =
+        current.dist + internal.total_ms + voidLatency.total_ms + voidSurcharge;
       const nextKey = stateKey(neighbor.id, pair.destination_tower);
 
       const knownNext = dist.get(nextKey);
@@ -381,4 +389,15 @@ export function findShortestRoute(
 function splitKey(key: string): [string, number] {
   const hash = key.lastIndexOf("#");
   return [key.slice(0, hash), Number(key.slice(hash + 1))];
+}
+
+/** Phase 1 physics-only lowest-latency routing (alias for {@link findShortestRoute}). */
+export function findBaselineRoute(
+  universe: Universe,
+  geometry: GeometryProvider,
+  originId: string,
+  destinationId: string,
+  options: RouteOptions = {},
+): Route {
+  return findShortestRoute(universe, geometry, originId, destinationId, options);
 }
