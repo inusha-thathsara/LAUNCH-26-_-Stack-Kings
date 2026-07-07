@@ -1,14 +1,4 @@
-export async function register() {
-  if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { initSentryServer } = await import("@/lib/observability/sentry");
-    initSentryServer();
-  }
-}
+import pkg from "../../package.json";
 
-export const onRequestError = async (
-  error: unknown,
-  request: { path: string; method: string },
-) => {
-  const { captureApiError } = await import("@/lib/observability/sentry");
-  captureApiError(error, { path: request.path, method: request.method });
-};
+/** Application semver from package.json (used in UI and /api/health). */
+export const APP_VERSION = pkg.version;

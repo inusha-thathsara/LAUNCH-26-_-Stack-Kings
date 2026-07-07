@@ -1,41 +1,22 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+/**
+ * Canonical link ID helper for the Chimera Co-Pilot module.
+ *
+ * The Council schema requires `link_id` strings to always combine two planet
+ * IDs in **alphabetical order** joined by a dash (e.g. "Aegis-Boreas", never
+ * "Boreas-Aegis"). This mirrors the `edgeKey` convention in
+ * {@link src/lib/relic/graph.ts} but uses `-` as separator instead of `|`,
+ * matching the `universe-config.json` schema and the API response format.
+ */
 
-import { logApiRequest } from "@/lib/api/logging";
-import { checkRateLimit } from "@/lib/api/rate-limit";
-
-function clientKey(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    return forwarded.split(",")[0]?.trim() ?? "unknown";
-  }
-  return request.headers.get("x-real-ip") ?? "unknown";
+/**
+ * Return the canonical interplanetary link identifier for a pair of planets.
+ * The two planet IDs are sorted lexicographically before joining, so the
+ * result is always the same regardless of argument order.
+ *
+ * @example
+ * canonicalLinkId("Boreas", "Aegis") // => "Aegis-Boreas"
+ * canonicalLinkId("Aegis", "Boreas") // => "Aegis-Boreas"
+ */
+export function canonicalLinkId(a: string, b: string): string {
+  return a < b ? `${a}-${b}` : `${b}-${a}`;
 }
-
-export function middleware(request: NextRequest) {
-  const route = request.nextUrl.pathname;
-  const method = request.method;
-  const start = Date.now();
-
-  if (!checkRateLimit(clientKey(request))) {
-    logApiRequest({
-      route,
-      method,
-      status: 429,
-      duration_ms: Date.now() - start,
-      error: "rate_limited",
-    });
-    return NextResponse.json(
-      {
-        error: "Too many requests. Please try again later.",
-        code: "RATE_LIMITED",
-      },
-      { status: 429 },
-    );
-  }
-  return NextResponse.next();
-}
-
-export const config = {
-  matcher: "/api/:path*",
-};
