@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # GitHub Actions does not allow `secrets` in job-level `if` expressions.
       # Probe via step env + shell instead, then skip deploy when unset.
