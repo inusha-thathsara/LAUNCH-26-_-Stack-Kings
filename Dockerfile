@@ -25,8 +25,10 @@ COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 # Copy the challenge configuration folders so they are resolved dynamically at runtime.
-COPY --from=builder --chown=node:node "/app/challenge p1" "./challenge p1"
-COPY --from=builder --chown=node:node "/app/challenge p2" "./challenge p2"
+# JSON/exec form is required because the folder names contain spaces; the shell
+# form of COPY splits on whitespace and ignores the surrounding quotes.
+COPY --from=builder --chown=node:node ["/app/challenge p1", "./challenge p1"]
+COPY --from=builder --chown=node:node ["/app/challenge p2", "./challenge p2"]
 
 USER node
 
