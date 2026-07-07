@@ -105,30 +105,51 @@ class MinHeap {
     let i = index;
     while (i > 0) {
       const parent = (i - 1) >> 1;
-      if (this.items[parent].dist <= this.items[i].dist) break;
-      [this.items[parent], this.items[i]] = [this.items[i], this.items[parent]];
+      const parentItem = this.items[parent];
+      const currentItem = this.items[i];
+      if (
+        parentItem === undefined ||
+        currentItem === undefined ||
+        parentItem.dist <= currentItem.dist
+      ) {
+        break;
+      }
+      this.items[parent] = currentItem;
+      this.items[i] = parentItem;
       i = parent;
     }
   }
 
   private bubbleDown(index: number): void {
-    const n = this.items.length;
     let i = index;
     for (;;) {
       const left = 2 * i + 1;
       const right = 2 * i + 2;
       let smallest = i;
-      if (left < n && this.items[left].dist < this.items[smallest].dist) {
+      const smallestItem = this.items[smallest];
+      const leftItem = this.items[left];
+      const rightItem = this.items[right];
+      if (
+        leftItem !== undefined &&
+        smallestItem !== undefined &&
+        leftItem.dist < smallestItem.dist
+      ) {
         smallest = left;
       }
-      if (right < n && this.items[right].dist < this.items[smallest].dist) {
+      const updatedSmallest = this.items[smallest];
+      if (
+        rightItem !== undefined &&
+        updatedSmallest !== undefined &&
+        rightItem.dist < updatedSmallest.dist
+      ) {
         smallest = right;
       }
       if (smallest === i) break;
-      [this.items[smallest], this.items[i]] = [
-        this.items[i],
-        this.items[smallest],
-      ];
+      const swapA = this.items[i];
+      const swapB = this.items[smallest];
+      if (swapA === undefined || swapB === undefined) break;
+      this.items[i] = swapB;
+      this.items[smallest] = swapA;
       i = smallest;
     }
   }
@@ -154,11 +175,7 @@ function emptyBreakdown(): LatencyBreakdown {
   };
 }
 
-function undeliverable(
-  originId: string,
-  destinationId: string,
-  reason: string,
-): Route {
+function undeliverable(originId: string, destinationId: string, reason: string): Route {
   return {
     origin_id: originId,
     destination_id: destinationId,
@@ -278,12 +295,7 @@ export function findShortestRoute(
         geometry,
         metadata,
       );
-      const voidLatency = computeVoidLatency(
-        planet,
-        neighbor,
-        geometry,
-        metadata,
-      );
+      const voidLatency = computeVoidLatency(planet, neighbor, geometry, metadata);
 
       const nextDist = current.dist + internal.total_ms + voidLatency.total_ms;
       const nextKey = stateKey(neighbor.id, pair.destination_tower);

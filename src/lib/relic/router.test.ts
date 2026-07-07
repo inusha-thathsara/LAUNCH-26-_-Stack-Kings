@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { parseUniverseConfig } from "./config";
 import { findShortestRoute } from "./router";
+import { universeConfigPath } from "./server/universe";
 import { createStubGeometryProvider } from "./stubs/geometry.stub";
 import type { PlanetNode, Universe, UniverseMetadata } from "./types";
 
@@ -63,8 +64,8 @@ describe("findShortestRoute", () => {
 
   it("charges one tower (s=0) at origin and destination", () => {
     const route = findShortestRoute(universe([a, b, c]), geometry, "A", "C");
-    const origin = route.steps[0];
-    const dest = route.steps[route.steps.length - 1];
+    const origin = route.steps[0]!;
+    const dest = route.steps[route.steps.length - 1]!;
     expect(origin.entry_tower).toBe(origin.exit_tower);
     expect(origin.internal.segments).toBe(0);
     expect(origin.internal.tower_ms).toBe(7);
@@ -119,18 +120,16 @@ describe("findShortestRoute", () => {
   });
 
   it("throws on an unknown planet id", () => {
-    expect(() =>
-      findShortestRoute(universe([a, b, c]), geometry, "A", "Nope"),
-    ).toThrow(/Unknown destination/);
-    expect(() =>
-      findShortestRoute(universe([a, b, c]), geometry, "Nope", "C"),
-    ).toThrow(/Unknown origin/);
+    expect(() => findShortestRoute(universe([a, b, c]), geometry, "A", "Nope")).toThrow(
+      /Unknown destination/,
+    );
+    expect(() => findShortestRoute(universe([a, b, c]), geometry, "Nope", "C")).toThrow(
+      /Unknown origin/,
+    );
   });
 
   it("routes across the real Zeta-26 universe", () => {
-    const raw = JSON.parse(
-      readFileSync(join(process.cwd(), "universe-config.json"), "utf8"),
-    );
+    const raw = JSON.parse(readFileSync(universeConfigPath(), "utf8"));
     const real = parseUniverseConfig(raw);
     const realGeometry = createStubGeometryProvider(real.metadata);
 

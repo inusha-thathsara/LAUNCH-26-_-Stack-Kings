@@ -1,0 +1,12 @@
+{
+  "compromised_links": {
+    "Aegis-Elysium": {
+      "mean_delta_ms": 78431.229,
+      "std_delta_ms": 87184.586
+    },
+    "Boreas-Fenix": {
+      "mean_delta_ms": 64818.334,
+      "std_delta_ms": 65393.808
+    }
+  }
+}

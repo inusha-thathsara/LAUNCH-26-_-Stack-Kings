@@ -3,6 +3,7 @@
 export * from "./types";
 export * from "./contracts";
 export * from "./config";
+export * from "./codec";
 export * from "./latency";
 export * from "./graph";
 export * from "./router";

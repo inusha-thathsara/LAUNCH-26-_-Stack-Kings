@@ -7,7 +7,11 @@ each planet's numerical dialect (codex), finds the lowest-latency route under a
 maximum void-hop constraint, and dynamically reroutes around node/link failures.
 
 Built with Next.js (App Router) + TypeScript. The protocol engine is headless and
-fully unit-tested; a browser console and a CLI expose it for the demo milestones.
+fully unit-tested; an interactive telemetry dashboard and a CLI expose it for the
+demo milestones.
+
+**Live demo:** [https://relic.inusha.me/relic](https://relic.inusha.me/relic) ·
+[https://launch-26-stack-kings.vercel.app/relic](https://launch-26-stack-kings.vercel.app/relic)
 
 ---
 
@@ -18,9 +22,11 @@ npm install
 npm run dev
 ```
 
-- Browser console: open [http://localhost:3000/relic](http://localhost:3000/relic)
+- Telemetry dashboard: open [http://localhost:3000/relic](http://localhost:3000/relic)
 - Terminal demo (M1-M4): `npm run relic`
 - Tests: `npm test`
+- Coverage: `npm run test:coverage`
+- E2E smoke (Playwright): `npx playwright install chromium && npm run test:e2e`
 - Production build: `npm run build && npm start`
 
 ### Run with Docker
@@ -36,19 +42,22 @@ Then open [http://localhost:3000/relic](http://localhost:3000/relic).
 
 ## What this implements (scope)
 
-This repository is one member's portion of a three-person team project. The two
-teammate-owned modules are isolated behind TypeScript interfaces in
-[`src/lib/relic/contracts.ts`](src/lib/relic/contracts.ts) and backed by functional
-stubs so the engine runs end-to-end today:
+This started as one member's portion of a three-person team project. The two
+teammate-facing modules are isolated behind TypeScript interfaces in
+[`src/lib/relic/contracts.ts`](src/lib/relic/contracts.ts):
 
 - **Mapping** (`GeometryProvider`) — tower placement, center/void distances, the
-  line-of-sight closest tower pair, ring segment counts, and the visual map UI.
-- **Encoding/Decoding** (`Codec`) — codex base conversion, ASCII representation,
-  and binary stream serialization.
+  line-of-sight closest tower pair, and ring segment counts. Backed by a complete,
+  correct provider in [`src/lib/relic/stubs/geometry.stub.ts`](src/lib/relic/stubs/geometry.stub.ts);
+  the interactive map UI lives in [`src/components/telemetry/`](src/components/telemetry).
+- **Encoding/Decoding** (`Codec`) — codex base conversion, ASCII representation, and
+  binary-stream serialization. Implemented in
+  [`src/lib/relic/codec.ts`](src/lib/relic/codec.ts) (`RelicCodec`): the void stream
+  serializes the **next-hop codex digits** (not raw ASCII), matching the protocol flow.
 
 Everything else is implemented here: config parsing, the latency engine, routing,
 resilience, the packet/`hop_log` orchestration, and the runnable surfaces (API,
-console, CLI). See [Team integration](#team-integration--merge-checklist).
+dashboard, CLI). See [Team integration](#team-integration--merge-checklist).
 
 ---
 
@@ -65,17 +74,23 @@ npm run relic -- send Aegis Caelum "Hello world" --kill Dawn --cut Aegis-Boreas
 
 ### HTTP API
 
-- `GET /api/universe` — **M1**: metadata, nodes, adjacency, and the within-Lmax edges.
-- `POST /api/transmit` — **M2/M3/M4**:
+- `GET /api/health` — liveness probe (version, config path/hash, engine status).
+- `GET /api/universe` — **M1**: metadata, nodes, adjacency, and the within-Lmax edges (cached 1 h).
+- `POST /api/transmit` — **M2/M3/M4** (payload capped at 10 KB; structured error codes):
 
 ```bash
+curl http://localhost:3000/api/health
+
 curl -X POST http://localhost:3000/api/transmit \
   -H "Content-Type: application/json" \
   -d '{"origin":"Aegis","destination":"Caelum","payload":"Hello world","blockedNodes":["Dawn"]}'
 ```
 
 Returns the `packet` (with `hop_log`), the `route` (path + latency breakdown), and
-the reconstructed `delivered_payload`.
+the reconstructed `delivered_payload`. API routes are rate-limited (120 req/min per client).
+
+**Config override:** set `UNIVERSE_CONFIG_PATH` to point at an alternate
+`universe-config.json` before starting the server or container.
 
 ---
 
@@ -91,8 +106,21 @@ Raw payload -> next-hop codex -> binary stream -> void -> destination codex
 Each planet receives data already encoded in **its own** codex (the previous
 planet encodes into the next hop's dialect before transmitting), so the `hop_log`
 records every planet's payload in its own dialect — proving the chain of
-conversions. The codec round-trip is actually executed per hop, so the delivered
-payload is a genuine reconstruction, not an assumption.
+conversions. Each non-final `hop_log` entry also carries `next_hop_codex`,
+`next_hop_dialect`, and the serialized `binary_stream` that actually crosses the
+void, so the encoding translation at every hop is fully visible (M2). The codec
+round-trip is actually executed per hop, so the delivered payload is a genuine
+reconstruction, not an assumption.
+
+### Telemetry dashboard (`/relic`)
+
+The dashboard ([`src/components/telemetry/`](src/components/telemetry)) is the main
+demo surface: an interactive `SpaceMap` (click planets to set origin/destination,
+click planets/links to fail them), latency gauges (M3), and a Codex Terminal that
+shows the per-hop local dialect, the next-hop conversion, and the binary stream
+(M2). One-click scenario presets (Baseline, Hyper-Flare, Distortion, Blackout,
+Chaos) inject failures for the M4 resilience demo; their targets are derived from
+the loaded universe, not hardcoded.
 
 ### Latency model
 
@@ -134,13 +162,13 @@ Constants come from `universe_metadata`. The four below fall back to the documen
 defaults **only when absent**; `coordinate_scale_unit_km` is required (it has no
 physically meaningful default and changes all distances).
 
-| Constant | Default | Justification |
-| --- | --- | --- |
-| `speed_of_light_kms` | `300000` | Speed of light `C` in km/s, per the spec. |
-| `max_void_hop_distance_km` | `50000000` | `Lmax`; a single laser hop across the void cannot exceed it. `L == Lmax` is treated as reachable (inclusive). |
-| `tower_processing_delay_ms` | `7` | Fixed processing penalty `dt` charged per distinct tower hit. |
-| `fiber_speed_fraction` | `0.67` | Fiber propagation runs at `0.67c` along the equatorial ring. |
-| `coordinate_scale_unit_km` | required | Multiplies abstract grid units to km. `radius_km` is already in km and is never scaled. |
+| Constant                    | Default    | Justification                                                                                                 |
+| --------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------- |
+| `speed_of_light_kms`        | `300000`   | Speed of light `C` in km/s, per the spec.                                                                     |
+| `max_void_hop_distance_km`  | `50000000` | `Lmax`; a single laser hop across the void cannot exceed it. `L == Lmax` is treated as reachable (inclusive). |
+| `tower_processing_delay_ms` | `7`        | Fixed processing penalty `dt` charged per distinct tower hit.                                                 |
+| `fiber_speed_fraction`      | `0.67`     | Fiber propagation runs at `0.67c` along the equatorial ring.                                                  |
+| `coordinate_scale_unit_km`  | required   | Multiplies abstract grid units to km. `radius_km` is already in km and is never scaled.                       |
 
 Modeling assumptions (consistent with the challenge's simplifications):
 
@@ -164,59 +192,118 @@ Modeling assumptions (consistent with the challenge's simplifications):
 
 ```
 src/
-  lib/relic/
-    types.ts          # domain model + mandatory packet/hop_log schema
-    contracts.ts      # GeometryProvider + Codec interfaces (teammate modules)
-    config.ts         # dynamic config parser + validator (metadata defaults)
-    latency.ts        # Tv, Tp, and route component breakdown
-    graph.ts          # network graph (L <= Lmax edges)
-    router.ts         # state-expanded Dijkstra (lowest-latency routing)
-    transmission.ts   # packet lifecycle + hop_log orchestration
-    resilience.ts     # kill/revive nodes & links, dynamic rerouting
-    engine.ts         # composition root (teammate swap point)
-    stubs/            # functional stand-ins for the teammate modules
-    server/universe.ts# Node-only config loader (cached engine)
+  lib/relic/          # engine (routing, latency, codec, transmission, resilience)
+  lib/api/            # validation, logging, rate limiting, route handler
+  components/telemetry/  # SpaceMap, LatencyMetrics, CodexTerminal, RelicDashboard
   app/
-    relic/page.tsx    # browser console (minimal demo harness)
-    api/universe      # GET  /api/universe  (M1)
-    api/transmit      # POST /api/transmit  (M2/M3/M4)
+    relic/page.tsx    # telemetry dashboard mount
+    api/              # health, universe, transmit, debug/sentry
   cli/relic.ts        # terminal demo (M1-M4)
+e2e/                  # Playwright smoke tests
+.github/workflows/    # CI (lint, test, coverage, E2E, Docker) + deploy
 universe-config.json  # the Zeta-26 universe (parsed dynamically)
 ```
+
+Reference docs: [`Equations.md`](Equations.md) · [`Launch26.md`](Launch26.md) · [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md)
 
 ---
 
 ## Demo milestone mapping
 
-| Milestone | Where to see it |
-| --- | --- |
-| M1 — Universe initialization | `npm run relic -- init`, or `GET /api/universe`, or load `/relic` |
-| M2 — Multi-hop proof (dialect translations) | `/relic` hop_log table, or `npm run relic` |
-| M3 — Latency breakdown (fiber/tower/atmosphere/void) | `/relic` breakdown cards, or CLI output |
-| M4 — Chaos test (kill node/link, reroute) | `/relic` "kill planets / sever links", or `npm run relic` |
+| Milestone                                            | Where to see it                                                                        |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| M1 — Universe initialization                         | `npm run relic -- init`, or `GET /api/universe`, or load `/relic`                      |
+| M2 — Multi-hop proof (dialect translations)          | `/relic` Codex Terminal (local + next-hop dialect + binary stream), or `npm run relic` |
+| M3 — Latency breakdown (fiber/tower/atmosphere/void) | `/relic` latency gauges, or CLI output                                                 |
+| M4 — Chaos test (kill node/link, reroute)            | `/relic` scenario presets / click a planet or link, or `npm run relic`                 |
 
 ---
 
 ## Team integration / merge checklist
 
-Teammate modules plug in at the single composition root,
+Modules plug in at the single composition root,
 [`src/lib/relic/engine.ts`](src/lib/relic/engine.ts):
 
-1. **Mapping** — provide an implementation of `GeometryProvider`
-   ([`contracts.ts`](src/lib/relic/contracts.ts)) and replace
-   `createStubGeometryProvider(...)` in `createEngine`.
-2. **Encoding/Decoding** — provide an implementation of `Codec` and replace
-   `createStubCodec()` in `createEngine`.
-3. Run `npm test` — the latency, routing, transmission, and `hop_log` suites act as
-   integration tests against the real modules (including the "Hello world" base-5 /
-   base-14 proof and payload-integrity checks).
-4. The mapping teammate's **visual map UI** consumes `GET /api/universe` and
-   `POST /api/transmit`; no engine changes are needed to integrate it.
+1. **Encoding/Decoding** — done: `createRelicCodec()`
+   ([`codec.ts`](src/lib/relic/codec.ts)) is wired in. To substitute a different
+   `Codec`, swap that one line.
+2. **Mapping** — `createStubGeometryProvider(...)` is a complete, correct
+   `GeometryProvider`. If a dedicated mapping module is provided, replace that line.
+3. Run `npm test` — the codec, latency, routing, transmission, and `hop_log` suites
+   act as integration tests (including the "Hello world" base-5 / base-14 proof and
+   payload-integrity checks).
+4. The **telemetry dashboard** consumes `GET /api/universe` and `POST /api/transmit`;
+   no engine changes are needed to integrate it.
 
-No other file needs to change to merge teammate work.
+No other file needs to change to swap a module.
+
+---
+
+## Branch workflow
+
+Development happens on **`inusha-dev`**; production deploys from **`main`** (Vercel Git integration).
+
+1. Work on `inusha-dev` locally — verify with the [Quick start](#quick-start) commands.
+2. Push to `origin/inusha-dev`.
+3. Open a pull request **`inusha-dev` → `main`** — CI must pass (lint, typecheck, coverage, build, E2E, Docker).
+4. Merge to `main` to update production (`relic.inusha.me`).
+
+Pushes to `inusha-dev` do **not** auto-merge into `main`.
+
+---
+
+## Deployment
+
+### Vercel (recommended)
+
+1. Import the GitHub repo in [Vercel](https://vercel.com).
+2. Framework is auto-detected (Next.js). `vercel.json` is included.
+3. Copy [`.env.example`](.env.example) variables into the Vercel project settings as needed
+   (`SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `NEXT_PUBLIC_SITE_URL`, etc.).
+4. Deploy — `/relic` is the demo surface; `/api/health` is the liveness probe.
+5. **Custom domain (optional):** add a subdomain (e.g. `relic.yourdomain.com`) in Vercel
+   **Settings → Domains**, then create the CNAME + TXT records your DNS provider shows.
+
+**GitHub Actions deploy:** add repository secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and
+`VERCEL_PROJECT_ID`. Pushes to `main` then run [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
+automatically (skipped when secrets are absent).
+
+### Docker
+
+```bash
+docker build -t relic-ring .
+docker run --rm -p 3000:3000 relic-ring
+curl http://localhost:3000/api/health
+```
+
+---
+
+## Observability
+
+- **Structured API logs:** every `/api/*` request emits a single-line JSON log
+  (`route`, `method`, `status`, `duration_ms`) via [`src/lib/api/logging.ts`](src/lib/api/logging.ts).
+- **Health probe:** `GET /api/health` returns `version`, `config_path`, `config_hash`, and
+  `engine_loaded` for deploy verification.
+- **Sentry (optional):** set `SENTRY_DSN` (server) and `NEXT_PUBLIC_SENTRY_DSN` (browser).
+  When unset, Sentry is fully disabled — no account required for local dev.
+- **Error boundaries:** `global-error.tsx` and the dashboard error boundary capture UI failures.
 
 ---
 
 ## Tech stack
 
-Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind CSS · Vitest · tsx
+Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind CSS · Vitest · Playwright · tsx · Sentry · Prettier · Husky
+
+## Quality & testing
+
+- **Unit tests:** Vitest (`src/**/*.test.ts`) — engine, API helpers, validation
+- **API integration:** `src/app/api/api.integration.test.ts` — health, universe, transmit edge cases
+- **E2E smoke:** Playwright (`e2e/relic.spec.ts`) — dashboard load, chaos scenario, manual transmit
+- **CI:** GitHub Actions runs lint, typecheck, coverage, build, Docker, and E2E on `main`
+- **Pre-commit:** husky + lint-staged (Prettier + ESLint on staged files)
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow.
+
+---
+
+We are continuously improving this project through teamwork, innovation, and community feedback.
