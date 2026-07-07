@@ -55,9 +55,9 @@ afterEach(() => {
 });
 
 describe("universe server loader", () => {
-  it("defaults universeConfigPath to the repo root file", () => {
+  it("defaults universeConfigPath to the Phase 2 config when present", () => {
     delete process.env[UNIVERSE_CONFIG_ENV];
-    expect(universeConfigPath()).toMatch(/universe-config\.json$/);
+    expect(universeConfigPath()).toMatch(/challenge p2[\\/]universe-config\.json$/);
   });
 
   it("honours UNIVERSE_CONFIG_PATH", () => {

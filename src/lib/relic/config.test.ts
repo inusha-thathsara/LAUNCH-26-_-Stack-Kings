@@ -278,4 +278,33 @@ describe("parseUniverseConfig — interplanetary_links", () => {
     };
     expect(() => parseUniverseConfig(config)).toThrow(/duplicate/);
   });
+
+  it("rejects a link whose void distance exceeds Lmax", () => {
+    const config = {
+      universe_metadata: {
+        ...validMetadata(),
+        max_void_hop_distance_km: 1,
+      },
+      nodes: [
+        validNode({ id: "Aegis", x: 0, y: 0 }),
+        validNode({ id: "Boreas", x: 10_000, y: 0 }),
+      ],
+      interplanetary_links: [
+        {
+          link_id: "Aegis-Boreas",
+          planet_a: "Aegis",
+          planet_b: "Boreas",
+          capacity_units: 100,
+        },
+      ],
+    };
+    expect(() => parseUniverseConfig(config)).toThrow(/exceeds Lmax/);
+  });
+
+  it("accepts links that are within Lmax on the physics graph", () => {
+    const raw = JSON.parse(readFileSync(universeConfigPath(), "utf8"));
+    expect(() => parseUniverseConfig(raw)).not.toThrow();
+    const universe = parseUniverseConfig(raw);
+    expect(universe.interplanetaryLinks.length).toBeGreaterThan(0);
+  });
 });

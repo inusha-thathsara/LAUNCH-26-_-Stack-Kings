@@ -1,6 +1,6 @@
 # Chimera Intelligence Report (Phase 1 Model Evaluation)
 
-This report documents the performance metrics and findings of the trained link-intelligence models. The models were evaluated offline using the historical datasets located in `challenge p2/`.
+This report documents the performance metrics and findings of the trained link-intelligence models. Coefficients are produced by `npm run train:models` and this report by `npm run evaluate:models`, both driven purely by the historical datasets in `challenge p2/`.
 
 ---
 
@@ -9,63 +9,63 @@ This report documents the performance metrics and findings of the trained link-i
 The Congestion model uses a per-link power-law regression of Chimera-induced latency penalty against live link load ratio:
 $$\text{penalty\_ms} = k \cdot (\text{load\_ratio})^p$$
 
-- **Global Mean Absolute Error (MAE):** **27479.588 ms** (or **27.480s** avg prediction offset)
-- **Evaluation Count:** 5743 ticks
+- **Global Mean Absolute Error (MAE):** **22654.435 ms** (~22.654s average prediction offset)
+- **Evaluation Count:** 5743 ticks (non-saturated `ok` rows)
 
 ### Per-Link MAE Breakdown:
 
 | Link ID        | MAE (ms)  | Data Count |
 | -------------- | --------- | ---------- |
-| Aegis-Boreas   | 11128.176 | 480        |
-| Aegis-Dawn     | 23235.710 | 477        |
-| Aegis-Elysium  | 27198.892 | 474        |
-| Boreas-Dawn    | 14326.445 | 478        |
-| Boreas-Elysium | 22226.917 | 477        |
-| Boreas-Fenix   | 30337.641 | 485        |
-| Caelum-Dawn    | 27218.097 | 477        |
-| Caelum-Elysium | 20294.698 | 476        |
-| Caelum-Fenix   | 27081.178 | 480        |
-| Dawn-Elysium   | 28010.409 | 480        |
-| Dawn-Fenix     | 22741.240 | 485        |
-| Elysium-Fenix  | 76407.668 | 474        |
+| Aegis-Boreas   | 13683.140 | 480        |
+| Aegis-Dawn     | 26387.363 | 477        |
+| Aegis-Elysium  | 27281.155 | 474        |
+| Boreas-Dawn    | 10645.228 | 478        |
+| Boreas-Elysium | 18295.995 | 477        |
+| Boreas-Fenix   | 28964.024 | 485        |
+| Caelum-Dawn    | 25671.272 | 477        |
+| Caelum-Elysium | 24201.355 | 476        |
+| Caelum-Fenix   | 19861.372 | 480        |
+| Dawn-Elysium   | 25729.032 | 480        |
+| Dawn-Fenix     | 21342.429 | 485        |
+| Elysium-Fenix  | 29864.556 | 474        |
 
 ---
 
 ## 2. Trust Model Spoofing Detection Accuracy
 
-The Trust model detects spoofing by analyzing live latency under-reporting against predicted honest latency distributions. The model flags a link as compromised if its trust score falls below `0.5`.
+The Trust model compares each link's self-reported latency against the physics + congestion baseline and flags systematic under-reporting. A link is treated as spoofed when its trust score falls below `0.5`.
 
-### Performance Matrix:
+### Performance Matrix (per-tick):
 
-- **True Positives (TP):** 677 (Compromised links correctly flagged)
-- **False Positives (FP):** 514 (Honest links mistakenly flagged)
-- **False Negatives (FN):** 323 (Compromised links missed)
-- **True Negatives (TN):** 4486 (Honest and clean links correctly passed)
+- **True Positives (TP):** 678
+- **False Positives (FP):** 58
+- **False Negatives (FN):** 285
+- **True Negatives (TN):** 4723
 
 ### Accuracy Metrics:
 
-- **Precision:** **56.84%** (Reliability of flags)
-- **Recall:** **67.70%** (Proportion of compromised ticks identified)
-- **F1 Score:** **0.6180**
+- **Precision:** **92.12%**
+- **Recall:** **70.40%**
+- **F1 Score:** **0.7981**
 
 ### Compromised Link Map:
 
-Our telemetry delta analysis confirms the following two links are actively lying (spoofed):
+Telemetry delta analysis confirms the following link(s) are actively spoofing (self-reporting faster than reality):
 
-1. **Aegis-Elysium:** Systematic under-reporting by ~29.1% (Mean delta: ~78.4 seconds).
-2. **Boreas-Fenix:** Systematic under-reporting by ~28.2% (Mean delta: ~64.8 seconds).
+1. **Aegis-Elysium:** systematic under-reporting (mean delta ~78.4s, std ~87.2s).
+2. **Boreas-Fenix:** systematic under-reporting (mean delta ~64.8s, std ~65.4s).
 
 ---
 
 ## 3. Targeting Risk Model Performance
 
-The Targeting Risk model evaluates the likelihood of a link being jammed by Chimera using a logistic regression function of its `traffic_share`:
+The Targeting Risk model estimates the probability of Chimera jamming a link using an L2-regularized per-link logistic regression on `traffic_share`:
 $$P(\text{jammed}) = \frac{1}{1 + e^{-(b_0 + b_1 \cdot \text{traffic\_share})}}$$
 
-- **Average Log Loss (Cross-Entropy):** **0.27859**
-- **Average Jammed Probability for Jammed Links:** **8.97%**
-- **Average Jammed Probability for Unjammed Links:** **8.15%**
+- **Average Log Loss (Cross-Entropy):** **0.28020**
+- **Average P(jammed) on jammed ticks:** **8.74%**
+- **Average P(jammed) on clean ticks:** **8.17%**
 
 ### Summary of Targeting Tendencies:
 
-As traffic share increases, Chimera is exponentially more likely to jam the link. Links with traffic share above `0.20` have their risk scores inflated up to `25% - 33%`, serving as a critical signal to enforce **route entropy** and diversification.
+As a link's traffic share rises, Chimera is increasingly likely to jam it. This is the core signal for enforcing **route entropy** — diversifying away from the single most-predictable path so the co-pilot does not paint a target on any one link.

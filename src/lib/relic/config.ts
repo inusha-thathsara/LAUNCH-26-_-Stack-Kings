@@ -6,13 +6,14 @@
  * values the spec marks as defaultable.
  */
 
+import { canonicalLinkId } from "../chimera/link-id";
 import type {
   InterplanetaryLink,
   PlanetNode,
   Universe,
   UniverseMetadata,
 } from "./types";
-import { canonicalLinkId } from "../chimera/link-id";
+import { createStubGeometryProvider } from "./stubs/geometry.stub";
 
 /** Documented defaults for the optional metadata constants. */
 export const METADATA_DEFAULTS = {
@@ -268,6 +269,39 @@ function parseInterplanetaryLink(
 }
 
 /**
+ * Ensure every configured interplanetary link is a valid physics void hop
+ * (void distance L <= Lmax). Chimera only operates on links the Phase 1
+ * graph would allow as a direct laser hop.
+ */
+function validateInterplanetaryLinksAgainstPhysics(
+  metadata: UniverseMetadata,
+  nodesById: Map<string, PlanetNode>,
+  links: InterplanetaryLink[],
+): void {
+  if (links.length === 0) {
+    return;
+  }
+
+  const geometry = createStubGeometryProvider(metadata);
+  const lmax = metadata.max_void_hop_distance_km;
+
+  for (const link of links) {
+    const nodeA = nodesById.get(link.planet_a);
+    const nodeB = nodesById.get(link.planet_b);
+    if (!nodeA || !nodeB) {
+      continue;
+    }
+
+    const voidKm = geometry.voidDistanceKm(nodeA, nodeB);
+    if (voidKm > lmax) {
+      throw new RelicConfigError(
+        `interplanetary_links: link "${link.link_id}" void distance ${voidKm.toFixed(3)} km exceeds Lmax (${lmax} km); not a valid physics hop.`,
+      );
+    }
+  }
+}
+
+/**
  * Parse and validate a raw universe configuration object.
  * @throws {RelicConfigError} when the structure or any value is invalid.
  */
@@ -315,6 +349,8 @@ export function parseUniverseConfig(raw: unknown): Universe {
       'Config: "interplanetary_links" must be an array when present.',
     );
   }
+
+  validateInterplanetaryLinksAgainstPhysics(metadata, nodesById, interplanetaryLinks);
 
   return { metadata, nodes, nodesById, interplanetaryLinks, linksById };
 }

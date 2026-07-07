@@ -15,7 +15,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
-    "relic": "tsx src/cli/relic.ts"
+    "relic": "tsx src/cli/relic.ts",
+    "train:models": "tsx scripts/train-models.ts",
+    "evaluate:models": "tsx scripts/evaluate-models.ts"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.63.0",

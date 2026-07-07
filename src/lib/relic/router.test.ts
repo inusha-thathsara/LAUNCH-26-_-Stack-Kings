@@ -36,6 +36,8 @@ function universe(nodes: PlanetNode[]): Universe {
     metadata,
     nodes,
     nodesById: new Map(nodes.map((n) => [n.id, n])),
+    interplanetaryLinks: [],
+    linksById: new Map(),
   };
 }
 

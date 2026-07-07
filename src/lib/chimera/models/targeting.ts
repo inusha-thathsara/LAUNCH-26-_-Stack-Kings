@@ -22,8 +22,9 @@ interface LogisticParams {
 
 const TARGETING_MODEL: Record<string, LogisticParams> = targetingModelData;
 
-// Global fallback if link not found in training coefficients
-const GLOBAL_FALLBACK: LogisticParams = { b0: -2.51091, b1: 1.20256 };
+// Global fallback (pooled logistic fit across all links) for unseen link IDs.
+// Produced by scripts/train-models.ts semantics; see INTELLIGENCE_REPORT.md.
+const GLOBAL_FALLBACK: LogisticParams = { b0: -2.73647, b1: 3.61594 };
 
 /**
  * Score the probability that Chimera will target this link.

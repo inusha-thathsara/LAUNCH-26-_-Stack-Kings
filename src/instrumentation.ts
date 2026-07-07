@@ -1,4 +1,13 @@
-import pkg from "../../package.json";
+import * as Sentry from "@sentry/nextjs";
 
-/** Application semver from package.json (used in UI and /api/health). */
-export const APP_VERSION = pkg.version;
+export async function register() {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    await import("../sentry.server.config");
+  }
+
+  if (process.env.NEXT_RUNTIME === "edge") {
+    await import("../sentry.edge.config");
+  }
+}
+
+export const onRequestError = Sentry.captureRequestError;

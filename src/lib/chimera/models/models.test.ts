@@ -2,7 +2,27 @@ import { describe, expect, it } from "vitest";
 import { predictCongestion } from "./congestion";
 import { scoreTrust } from "./trust";
 import { scoreTargetingRisk } from "./targeting";
+import congestionModel from "./congestion.model.json";
+import targetingModel from "./targeting.model.json";
 import type { ChimeraLinkState } from "../types";
+
+const congestionCoeffs = congestionModel as Record<string, { k: number; p: number }>;
+const targetingCoeffs = targetingModel as Record<string, { b0: number; b1: number }>;
+
+function baseState(overrides: Partial<ChimeraLinkState> = {}): ChimeraLinkState {
+  return {
+    link_id: "Aegis-Boreas",
+    planet_a: "Aegis",
+    planet_b: "Boreas",
+    capacity_units: 208,
+    current_load: 90,
+    load_ratio: 0.4328,
+    self_reported_latency_ms: 118000,
+    traffic_share: 0.03833,
+    status: "ok",
+    ...overrides,
+  };
+}
 
 describe("Analytical Models", () => {
   describe("predictCongestion", () => {
@@ -56,22 +76,39 @@ describe("Analytical Models", () => {
       expect(result.is_saturated).toBe(true);
     });
 
-    it("predicts congestion penalty for non-saturated links", () => {
-      const mockState: ChimeraLinkState = {
-        link_id: "Aegis-Boreas",
-        planet_a: "Aegis",
-        planet_b: "Boreas",
-        capacity_units: 208,
-        current_load: 90,
+    it("predicts congestion penalty matching the trained power-law coefficients", () => {
+      const mockState = baseState({
         load_ratio: 0.4328,
         self_reported_latency_ms: 118635.583,
-        traffic_share: 0.03833,
-        status: "ok",
-      };
+      });
       const result = predictCongestion(mockState, 60093.219);
       expect(result.is_saturated).toBe(false);
-      // expected: k=383782.122, p=2.261 -> 383782.122 * Math.pow(0.4328, 2.261) = 57773.70 ms
-      expect(result.penalty_ms).toBeCloseTo(57773.7, 0);
+
+      const { k, p } = congestionCoeffs["Aegis-Boreas"]!;
+      const expected = k * Math.pow(0.4328, p);
+      expect(result.penalty_ms).toBeCloseTo(expected, 3);
+    });
+
+    it("increases the congestion penalty monotonically with load ratio", () => {
+      const low = predictCongestion(baseState({ load_ratio: 0.2 }), 60093.219);
+      const mid = predictCongestion(baseState({ load_ratio: 0.5 }), 60093.219);
+      const high = predictCongestion(baseState({ load_ratio: 0.8 }), 60093.219);
+      expect(mid.penalty_ms).toBeGreaterThan(low.penalty_ms);
+      expect(high.penalty_ms).toBeGreaterThan(mid.penalty_ms);
+    });
+
+    it("falls back to a global power law for unknown links", () => {
+      const result = predictCongestion(
+        baseState({
+          link_id: "Unknown-Link",
+          planet_a: "Unknown",
+          planet_b: "Link",
+          load_ratio: 0.5,
+        }),
+        50000,
+      );
+      expect(result.is_saturated).toBe(false);
+      expect(result.penalty_ms).toBeGreaterThan(0);
     });
   });
 
@@ -144,22 +181,33 @@ describe("Analytical Models", () => {
   });
 
   describe("scoreTargetingRisk", () => {
-    it("calculates targeting risk score using logistic regression", () => {
-      const mockState: ChimeraLinkState = {
-        link_id: "Aegis-Boreas",
-        planet_a: "Aegis",
-        planet_b: "Boreas",
-        capacity_units: 208,
-        current_load: 90,
-        load_ratio: 0.4328,
-        self_reported_latency_ms: 118000,
-        traffic_share: 0.35, // High traffic share
-        status: "ok",
-      };
-      const score = scoreTargetingRisk(mockState);
-      // expected: z = -2.21305 + 1.99644 * 0.35 = -1.5143
-      // probability = 1 / (1 + exp(1.5143)) = 0.1803
-      expect(score).toBeCloseTo(0.1803, 3);
+    it("matches the trained logistic coefficients", () => {
+      const share = 0.35;
+      const score = scoreTargetingRisk(baseState({ traffic_share: share }));
+      const { b0, b1 } = targetingCoeffs["Aegis-Boreas"]!;
+      const expected = 1 / (1 + Math.exp(-(b0 + b1 * share)));
+      expect(score).toBeCloseTo(expected, 4);
+    });
+
+    it("rises monotonically with traffic share and stays in [0, 1]", () => {
+      const low = scoreTargetingRisk(baseState({ traffic_share: 0.02 }));
+      const high = scoreTargetingRisk(baseState({ traffic_share: 0.4 }));
+      expect(high).toBeGreaterThan(low);
+      expect(low).toBeGreaterThanOrEqual(0);
+      expect(high).toBeLessThanOrEqual(1);
+    });
+
+    it("falls back to the global logistic model for unknown links", () => {
+      const score = scoreTargetingRisk(
+        baseState({
+          link_id: "Unknown-Link",
+          planet_a: "Unknown",
+          planet_b: "Link",
+          traffic_share: 0.3,
+        }),
+      );
+      expect(score).toBeGreaterThan(0);
+      expect(score).toBeLessThan(1);
     });
   });
 });

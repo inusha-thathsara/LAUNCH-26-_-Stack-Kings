@@ -16,6 +16,16 @@ import { RelicConfigError } from "../config";
 /** Environment variable overriding the universe config file path. */
 export const UNIVERSE_CONFIG_ENV = "UNIVERSE_CONFIG_PATH";
 
+/**
+ * Relative paths tried when `UNIVERSE_CONFIG_PATH` is unset (Phase 2 first).
+ * See `.env.example` for override instructions.
+ */
+export const DEFAULT_UNIVERSE_CONFIG_CANDIDATES = [
+  "challenge p2/universe-config.json",
+  "challenge p1/universe-config.json",
+  "universe-config.json",
+] as const;
+
 /** Absolute path to the universe configuration file. */
 export function universeConfigPath(): string {
   const configured = process.env[UNIVERSE_CONFIG_ENV];
@@ -23,11 +33,9 @@ export function universeConfigPath(): string {
     return configured;
   }
 
-  const candidatePaths = [
-    join(process.cwd(), "challenge p2/universe-config.json"),
-    join(process.cwd(), "challenge p1/universe-config.json"),
-    join(process.cwd(), "universe-config.json"),
-  ];
+  const candidatePaths = DEFAULT_UNIVERSE_CONFIG_CANDIDATES.map((relative) =>
+    join(process.cwd(), relative),
+  );
 
   for (const candidate of candidatePaths) {
     if (existsSync(candidate)) {
