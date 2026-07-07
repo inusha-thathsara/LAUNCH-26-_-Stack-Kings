@@ -27,6 +27,22 @@ export { routeWithTrueCost } from "./router/true-cost-router";
 export { ChimeraClient, chimeraClient, getLastChimeraTick } from "./client";
 export type { ChimeraLinksResponse, ChimeraStateResponse } from "./client";
 
+// Health probes (Phase 3)
+export {
+  areModelsLoaded,
+  getChimeraHealthSnapshot,
+  probeChimeraReachable,
+} from "./health";
+export type { ChimeraHealthSnapshot } from "./health";
+
+// Strict output schema for the mandatory routing report (Phase 3)
+export {
+  assertValidRoutingReport,
+  phase2RoutingReportSchema,
+  linkEvaluationSchema,
+  ReportValidationError,
+} from "./report-schema";
+
 // Analytical sub-model runtime APIs (Ruwan)
 export { predictCongestion } from "./models/congestion";
 export type { CongestionResult } from "./models/congestion";

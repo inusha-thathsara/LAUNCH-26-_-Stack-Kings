@@ -4,7 +4,10 @@ export type ApiErrorCode =
   | "PAYLOAD_TOO_LARGE"
   | "BLOCKED_LIST_TOO_LARGE"
   | "ENGINE_ERROR"
-  | "RATE_LIMITED";
+  | "RATE_LIMITED"
+  | "PARSER_ERROR"
+  | "ROUTING_ERROR"
+  | "CHIMERA_UNAVAILABLE";
 
 export interface ApiErrorBody {
   error: string;

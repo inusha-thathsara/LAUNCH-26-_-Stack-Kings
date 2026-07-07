@@ -1,9 +1,17 @@
 "use client";
 
 import { useCallback, useMemo, useState, useRef, useEffect } from "react";
-import type { PlanetNode } from "@/lib/relic/types";
+import type { PlanetNode, LinkEvaluation } from "@/lib/relic/types";
 import type { VoidEdge } from "@/lib/relic/graph";
 import type { Route } from "@/lib/relic/router";
+import {
+  evaluationsByLinkId,
+  isHighTargetingRisk,
+  isLinkBlocked,
+  trustScoreColor,
+} from "./chimera-ui-utils";
+
+export type PathViewMode = "chosen" | "baseline";
 
 interface SpaceMapProps {
   nodes: PlanetNode[];
@@ -13,6 +21,14 @@ interface SpaceMapProps {
   deadNodes: Set<string>;
   deadLinks: Set<string>;
   route: Route | null;
+  /** Co-Pilot chosen path (planet id sequence). */
+  chosenPath?: string[] | null;
+  /** Physics baseline path for comparison toggle. */
+  baselinePath?: string[] | null;
+  pathView?: PathViewMode;
+  onPathViewChange?: (view: PathViewMode) => void;
+  /** Live link evaluations from Phase2RoutingReport. */
+  linkEvaluations?: LinkEvaluation[] | null;
   onSetOrigin: (id: string) => void;
   onSetDestination: (id: string) => void;
   onToggleNode: (id: string) => void;
@@ -27,6 +43,11 @@ export default function SpaceMap({
   deadNodes,
   deadLinks,
   route,
+  chosenPath = null,
+  baselinePath = null,
+  pathView = "chosen",
+  onPathViewChange,
+  linkEvaluations = null,
   onSetOrigin,
   onSetDestination,
   onToggleNode,
@@ -104,6 +125,48 @@ export default function SpaceMap({
   function linkKey(a: string, b: string): string {
     return a < b ? `${a}|${b}` : `${b}|${a}`;
   }
+
+  function canonicalLinkId(a: string, b: string): string {
+    return a < b ? `${a}-${b}` : `${b}-${a}`;
+  }
+
+  const overlayByLinkId = useMemo(
+    () => (linkEvaluations ? evaluationsByLinkId(linkEvaluations) : new Map()),
+    [linkEvaluations],
+  );
+
+  const activeHighlightPath = useMemo(() => {
+    if (pathView === "baseline" && baselinePath && baselinePath.length >= 2) {
+      return baselinePath;
+    }
+    if (chosenPath && chosenPath.length >= 2) {
+      return chosenPath;
+    }
+    return null;
+  }, [pathView, baselinePath, chosenPath]);
+
+  const highlightPathD = useMemo(() => {
+    if (!activeHighlightPath || activeHighlightPath.length < 2) return "";
+    let d = "";
+    for (let i = 0; i < activeHighlightPath.length - 1; i += 1) {
+      const fromId = activeHighlightPath[i];
+      const toId = activeHighlightPath[i + 1];
+      const fromPlanet = nodes.find((n) => n.id === fromId);
+      const toPlanet = nodes.find((n) => n.id === toId);
+      if (!fromPlanet || !toPlanet) continue;
+      const x1 = scaleX(fromPlanet.x);
+      const y1 = scaleY(fromPlanet.y);
+      const x2 = scaleX(toPlanet.x);
+      const y2 = scaleY(toPlanet.y);
+      d += i === 0 ? `M ${x1} ${y1}` : "";
+      d += ` L ${x2} ${y2}`;
+    }
+    return d;
+  }, [activeHighlightPath, nodes, scaleX, scaleY]);
+
+  const showPathToggle = Boolean(
+    baselinePath && baselinePath.length >= 2 && chosenPath && chosenPath.length >= 2,
+  );
 
   function activateFromKeyboard(event: React.KeyboardEvent, action: () => void): void {
     if (event.key === "Enter" || event.key === " ") {
@@ -280,6 +343,35 @@ export default function SpaceMap({
           </span>
         </div>
         <div className="flex items-center gap-3">
+          {showPathToggle && onPathViewChange && (
+            <div
+              className="flex rounded-lg border border-white/10 bg-zinc-950/60 p-0.5 text-[9px] font-bold uppercase"
+              data-testid="path-view-toggle"
+            >
+              <button
+                type="button"
+                onClick={() => onPathViewChange("chosen")}
+                className={`rounded-md px-2 py-1 transition-colors cursor-pointer ${
+                  pathView === "chosen"
+                    ? "bg-emerald-600 text-white"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                Co-Pilot
+              </button>
+              <button
+                type="button"
+                onClick={() => onPathViewChange("baseline")}
+                className={`rounded-md px-2 py-1 transition-colors cursor-pointer ${
+                  pathView === "baseline"
+                    ? "bg-sky-600 text-white"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                Baseline
+              </button>
+            </div>
+          )}
           <span className="text-[10px] font-mono text-zinc-500">
             ZOOM: {Math.round(zoom * 100)}%
           </span>
@@ -339,10 +431,22 @@ export default function SpaceMap({
                 const y2 = scaleY(nodeB.y);
 
                 const key = linkKey(edge.from, edge.to);
+                const linkId = canonicalLinkId(edge.from, edge.to);
+                const evaluation = overlayByLinkId.get(linkId);
                 const isDead =
                   deadLinks.has(key) ||
                   deadNodes.has(edge.from) ||
                   deadNodes.has(edge.to);
+                const chimeraBlocked = evaluation ? isLinkBlocked(evaluation) : false;
+                const highTargeting = evaluation
+                  ? isHighTargetingRisk(evaluation)
+                  : false;
+                const strokeColor = evaluation
+                  ? trustScoreColor(evaluation.trust_score)
+                  : isDead
+                    ? "rgba(239, 68, 68, 0.4)"
+                    : "rgba(255, 255, 255, 0.15)";
+                const useDash = isDead || chimeraBlocked;
 
                 return (
                   <g key={key}>
@@ -386,18 +490,46 @@ export default function SpaceMap({
                       y1={y1}
                       x2={x2}
                       y2={y2}
-                      stroke={
-                        isDead ? "rgba(239, 68, 68, 0.4)" : "rgba(255, 255, 255, 0.15)"
-                      }
-                      strokeWidth="1.5"
-                      strokeDasharray={isDead ? "4, 4" : "none"}
-                      className="transition-all duration-300"
+                      stroke={strokeColor}
+                      strokeWidth={evaluation ? "2.5" : "1.5"}
+                      strokeDasharray={useDash ? "6, 4" : "none"}
+                      className={`transition-all duration-300 ${highTargeting ? "animate-pulse" : ""}`}
+                      data-testid={`void-link-${linkId}`}
                     />
                   </g>
                 );
               })}
 
-            {/* 2. Draw active route overlay beam */}
+            {/* 2. Co-Pilot / baseline path overlay (planet-center hops) */}
+            {highlightPathD &&
+              !(route && route.deliverable && pathView === "chosen") && (
+                <g data-testid="copilot-path-overlay">
+                  <path
+                    d={highlightPathD}
+                    fill="none"
+                    stroke={
+                      pathView === "baseline"
+                        ? "rgba(56, 189, 248, 0.35)"
+                        : "rgba(16, 185, 129, 0.35)"
+                    }
+                    strokeWidth="5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="blur-sm"
+                  />
+                  <path
+                    d={highlightPathD}
+                    fill="none"
+                    stroke={pathView === "baseline" ? "#38bdf8" : "#10b981"}
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray={pathView === "baseline" ? "8, 6" : "none"}
+                  />
+                </g>
+              )}
+
+            {/* 2b. Draw active transmit route overlay beam */}
             {route && route.deliverable && animationPathD && (
               <g>
                 {/* Backlight path */}
@@ -443,7 +575,9 @@ export default function SpaceMap({
               const isDead = deadNodes.has(node.id);
               const isOrigin = origin === node.id;
               const isDestination = destination === node.id;
-              const isInRoute = route?.path.includes(node.id) ?? false;
+              const isInRoute =
+                (route?.path.includes(node.id) ?? false) ||
+                (activeHighlightPath?.includes(node.id) ?? false);
 
               // Compute atmosphere thickness visually (proportional scale)
               const atmosWidth = 3 + Math.sqrt(node.atmosphere_thickness_km) * 0.4;
@@ -714,7 +848,19 @@ export default function SpaceMap({
         </div>
         <div className="flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-full border border-emerald-500 bg-emerald-950"></span>
-          <span>Active Route Nodes</span>
+          <span>Co-Pilot / Active Route</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="h-0.5 w-3 rounded border border-sky-400 bg-sky-400"></span>
+          <span>Baseline Physics</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-full bg-gradient-to-r from-red-500 to-emerald-500"></span>
+          <span>Trust (red → green)</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="h-3 w-3 animate-pulse rounded-full bg-yellow-500/60"></span>
+          <span>High targeting risk</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-full border border-red-500 bg-red-950/40 line-through"></span>

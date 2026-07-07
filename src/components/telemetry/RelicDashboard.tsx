@@ -1,12 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { PlanetNode, UniverseMetadata } from "@/lib/relic/types";
+import type {
+  PlanetNode,
+  UniverseMetadata,
+  Phase2RoutingReport,
+} from "@/lib/relic/types";
 import type { VoidEdge } from "@/lib/relic/graph";
 import type { TransmissionResult } from "@/lib/relic/transmission";
-import SpaceMap from "./SpaceMap";
+import SpaceMap, { type PathViewMode } from "./SpaceMap";
 import CodexTerminal from "./CodexTerminal";
 import LatencyMetrics from "./LatencyMetrics";
+import LinkEvaluationsPanel from "./LinkEvaluationsPanel";
+import IntelligenceSummary from "./IntelligenceSummary";
+import { parseBaselinePathFromExplanation } from "./chimera-ui-utils";
 
 interface UniverseResponse {
   metadata: UniverseMetadata;
@@ -33,6 +40,20 @@ export default function RelicDashboard({ appVersion }: RelicDashboardProps) {
   const [result, setResult] = useState<TransmissionResult | null>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+
+  const [nlRequest, setNlRequest] = useState("Send Hello world from Aegis to Caelum");
+  const [routingReport, setRoutingReport] = useState<Phase2RoutingReport | null>(null);
+  const [routingLoading, setRoutingLoading] = useState(false);
+  const [routingError, setRoutingError] = useState<string | null>(null);
+  const [pathView, setPathView] = useState<PathViewMode>("chosen");
+
+  const baselinePath = useMemo(
+    () =>
+      routingReport
+        ? parseBaselinePathFromExplanation(routingReport.explanation)
+        : null,
+    [routingReport],
+  );
 
   // Load universe config
   useEffect(() => {
@@ -169,7 +190,34 @@ export default function RelicDashboard({ appVersion }: RelicDashboardProps) {
     }
   }, [origin, destination, payload, deadNodes, deadLinks]);
 
-  // Debounced auto-trigger for a reactive simulation experience. Running inside
+  const routeWithCopilot = useCallback(async () => {
+    const trimmed = nlRequest.trim();
+    if (!trimmed) return;
+    setRoutingLoading(true);
+    setRoutingError(null);
+    setRoutingReport(null);
+    setPathView("chosen");
+    try {
+      const res = await fetch("/api/route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request: trimmed }),
+      });
+      const data = (await res.json()) as Phase2RoutingReport & { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error ?? "Co-Pilot routing failed");
+      }
+      setRoutingReport(data);
+      setOrigin(data.origin_id);
+      setDestination(data.destination_id);
+    } catch (error: unknown) {
+      setRoutingError(error instanceof Error ? error.message : "Unknown error");
+    } finally {
+      setRoutingLoading(false);
+    }
+  }, [nlRequest]);
+
+  // Debounced auto-trigger for a reactive simulation experience.
   // a timeout keeps the setState calls out of the synchronous effect body and
   // coalesces rapid edits (e.g. typing in the payload field).
   useEffect(() => {
@@ -192,6 +240,9 @@ export default function RelicDashboard({ appVersion }: RelicDashboardProps) {
             <div className="flex items-center gap-2">
               <span className="rounded bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
                 Relic Ring Protocol
+              </span>
+              <span className="rounded bg-cyan-500/10 border border-cyan-500/25 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-cyan-400">
+                Chimera Co-Pilot
               </span>
               <span
                 className="text-[10px] font-mono text-zinc-500"
@@ -391,6 +442,52 @@ export default function RelicDashboard({ appVersion }: RelicDashboardProps) {
 
               <div className="h-px bg-white/10 my-1"></div>
 
+              {/* Phase 2 — Co-Pilot NL routing */}
+              <div className="flex flex-col gap-3">
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/90">
+                  Co-Pilot Natural Language
+                </h3>
+                <div className="flex flex-col gap-1.5">
+                  <label
+                    htmlFor="nl-copilot-request"
+                    className="text-[10px] font-medium uppercase text-zinc-500"
+                  >
+                    Routing Request
+                  </label>
+                  <textarea
+                    id="nl-copilot-request"
+                    data-testid="nl-copilot-input"
+                    rows={3}
+                    className="resize-none rounded-lg border border-cyan-500/20 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-cyan-500/50 transition-all font-mono"
+                    value={nlRequest}
+                    onChange={(e) => setNlRequest(e.target.value)}
+                    placeholder='e.g. "Send status ping from Boreas to Fenix"'
+                  />
+                </div>
+                {routingReport && (
+                  <div
+                    data-testid="parsed-intent"
+                    className="rounded-lg border border-cyan-500/20 bg-cyan-950/20 px-3 py-2 text-[11px] font-mono text-cyan-100/90"
+                  >
+                    <span className="text-cyan-500/70 uppercase text-[9px] font-bold tracking-wider block mb-1">
+                      Parsed intent
+                    </span>
+                    {routingReport.origin_id} → {routingReport.destination_id}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  data-testid="copilot-route-button"
+                  onClick={() => void routeWithCopilot()}
+                  disabled={routingLoading || !nlRequest.trim()}
+                  className="rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed text-white py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-lg shadow-cyan-500/10"
+                >
+                  {routingLoading ? "Co-Pilot routing..." : "Route with Co-Pilot"}
+                </button>
+              </div>
+
+              <div className="h-px bg-white/10 my-1"></div>
+
               {/* Chaos Status Summary */}
               <div className="flex flex-col gap-2">
                 <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-zinc-400">
@@ -447,12 +544,12 @@ export default function RelicDashboard({ appVersion }: RelicDashboardProps) {
 
             {/* Simulation Dashboard Main */}
             <main className="flex flex-col gap-6">
-              {sendError && (
+              {(sendError || routingError) && (
                 <div
                   role="alert"
                   className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300"
                 >
-                  {sendError}
+                  {sendError ?? routingError}
                 </div>
               )}
 
@@ -465,11 +562,51 @@ export default function RelicDashboard({ appVersion }: RelicDashboardProps) {
                 deadNodes={deadNodes}
                 deadLinks={deadLinks}
                 route={result?.route ?? null}
+                chosenPath={routingReport?.chosen_path ?? null}
+                baselinePath={baselinePath}
+                pathView={pathView}
+                onPathViewChange={setPathView}
+                linkEvaluations={routingReport?.link_evaluations ?? null}
                 onSetOrigin={setOrigin}
                 onSetDestination={setDestination}
                 onToggleNode={toggleNode}
                 onToggleLink={toggleLink}
               />
+
+              {routingReport && (
+                <div
+                  data-testid="copilot-explanation"
+                  className="rounded-2xl border border-cyan-500/20 bg-cyan-950/15 p-5 backdrop-blur-xl shadow-2xl"
+                >
+                  <h2 className="mb-2 text-[10px] font-bold uppercase tracking-widest text-cyan-400/90">
+                    Co-Pilot Explanation
+                  </h2>
+                  <p className="text-sm leading-relaxed text-zinc-300">
+                    {routingReport.explanation}
+                  </p>
+                  <p className="mt-2 font-mono text-[11px] text-zinc-500">
+                    Estimated latency:{" "}
+                    <span className="text-cyan-300">
+                      {routingReport.final_latency_estimate_ms.toFixed(1)} ms
+                    </span>
+                  </p>
+                </div>
+              )}
+
+              {/* Phase 2 intelligence panels */}
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                {routingReport ? (
+                  <LinkEvaluationsPanel evaluations={routingReport.link_evaluations} />
+                ) : (
+                  <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-zinc-900/30 p-8 text-center">
+                    <p className="text-xs text-zinc-500">
+                      Run a Co-Pilot route to see per-link evaluations and decision
+                      audit rows.
+                    </p>
+                  </div>
+                )}
+                <IntelligenceSummary />
+              </div>
 
               {/* Telemetry Breakdown Details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

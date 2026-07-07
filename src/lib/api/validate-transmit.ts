@@ -1,10 +1,6 @@
 import type { RouteOptions } from "@/lib/relic/router";
 
-import {
-  MAX_BLOCKED_EDGES,
-  MAX_BLOCKED_NODES,
-  MAX_PAYLOAD_CHARS,
-} from "./constants";
+import { MAX_BLOCKED_EDGES, MAX_BLOCKED_NODES, MAX_PAYLOAD_CHARS } from "./constants";
 import type { ApiErrorBody } from "./errors";
 
 export interface TransmitRequest {
@@ -12,6 +8,8 @@ export interface TransmitRequest {
   destination: string;
   payload: string;
   options: RouteOptions;
+  /** When true, attach a Phase 2 Co-Pilot routing report to the response. */
+  useCopilot: boolean;
 }
 
 type ValidationFailure = { ok: false; status: number; body: ApiErrorBody };
@@ -119,6 +117,7 @@ export function validateTransmitBody(
       destination,
       payload,
       options: { blockedNodes, blockedEdges },
+      useCopilot: record.use_copilot === true,
     },
   };
 }
