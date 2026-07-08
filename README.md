@@ -359,6 +359,8 @@ curl http://localhost:3000/api/health
   for deploy verification.
 - **Sentry (optional):** set `SENTRY_DSN` (server) and `NEXT_PUBLIC_SENTRY_DSN` (browser).
   When unset, Sentry is fully disabled — no account required for local dev.
+  For readable production stack traces in the Sentry UI, also set `SENTRY_AUTH_TOKEN`
+  in Vercel (build-time only; enables source-map upload during `next build`).
 - **Error boundaries:** `global-error.tsx` and the dashboard error boundary capture UI failures.
 
 ---

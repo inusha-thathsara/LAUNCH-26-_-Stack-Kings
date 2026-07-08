@@ -29,6 +29,8 @@ const securityHeaders = [
   },
 ];
 
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
+
 const nextConfig: NextConfig = {
   reactCompiler: true,
   // Emit a self-contained server bundle for a lean container image.
@@ -51,8 +53,15 @@ export default withSentryConfig(nextConfig, {
 
   project: "javascript-nextjs",
 
-  // Only print logs for uploading source maps in CI
-  silent: !process.env.CI,
+  // Source-map upload + release creation require a build-time auth token.
+  // Without it, skip uploads silently (runtime error reporting still works via DSN).
+  authToken: sentryAuthToken,
+  sourcemaps: {
+    disable: !sentryAuthToken,
+  },
+
+  // Suppress upload warnings on Vercel/CI when no auth token is configured.
+  silent: !sentryAuthToken,
 
   // For all available options, see:
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
