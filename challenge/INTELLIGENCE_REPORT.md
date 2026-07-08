@@ -2,6 +2,8 @@
 
 This report documents the performance metrics and findings of the trained link-intelligence models. Coefficients are produced by `npm run train:models` and this report by `npm run evaluate:models`, both driven purely by the historical datasets in `challenge p2/`.
 
+**Where to present this:** `/relic` → **Intelligence Walkthrough** panel (dashboard), or open this file during the **Intelligence Walkthrough** evaluation trial. Decision-audit score formulas: [`DECISION_AUDIT.md`](DECISION_AUDIT.md).
+
 ---
 
 ## 1. Congestion Model (MAE Performance)

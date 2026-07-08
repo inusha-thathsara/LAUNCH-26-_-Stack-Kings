@@ -151,6 +151,23 @@ don't trust it — we clamp it, assume the worst, and route around it."
 
 ---
 
+## 7. End-to-end proof (`transmit` + `hop_log`)
+
+When `POST /api/transmit` is called with `"use_copilot": true` and a valid
+routing report exists:
+
+1. The Co-Pilot computes `chosen_path` and `link_evaluations[]` as above.
+2. The physics router is **constrained** to only the edges on `chosen_path`.
+3. The returned `hop_log` proves the packet crossed those hops — intelligent
+   routing is not display-only.
+4. If that path is manually severed, transmission falls back to the physics
+   baseline and `transmitted_on_copilot_path` is `false`.
+
+**Talking point:** "The Council schema drives the actual beam — the hop_log is
+the receipt."
+
+---
+
 ## Quick numbers to memorise
 
 | Thing                              | Value                       |

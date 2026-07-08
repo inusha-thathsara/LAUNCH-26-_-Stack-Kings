@@ -1,5 +1,48 @@
 import type { LinkEvaluation } from "@/lib/relic/types";
 
+export interface PreviewIntent {
+  origin: string | null;
+  destination: string | null;
+  payload: string | null;
+}
+
+/**
+ * Best-effort, client-side preview of the structured intent so the operator can
+ * see the parsed origin / destination / payload BEFORE routing. This mirrors the
+ * server rules-layer heuristics (from/to, arrow, quoted/`send …` payload) but is
+ * display-only — the server-side hybrid parser remains the source of truth.
+ */
+export function previewParseIntent(text: string, nodeIds: string[]): PreviewIntent {
+  const result: PreviewIntent = { origin: null, destination: null, payload: null };
+  const trimmed = text.trim();
+  if (!trimmed) return result;
+
+  const resolve = (raw: string | undefined): string | null => {
+    if (!raw) return null;
+    const token = raw.trim().toLowerCase();
+    return nodeIds.find((id) => id.toLowerCase() === token) ?? null;
+  };
+
+  const fromTo = trimmed.match(/\bfrom\s+([A-Za-z][\w-]*)\s+to\s+([A-Za-z][\w-]*)/i);
+  const arrow = trimmed.match(/\b([A-Za-z][\w-]*)\s*(?:->|→)\s*([A-Za-z][\w-]*)/);
+  if (fromTo) {
+    result.origin = resolve(fromTo[1]);
+    result.destination = resolve(fromTo[2]);
+  } else if (arrow) {
+    result.origin = resolve(arrow[1]);
+    result.destination = resolve(arrow[2]);
+  }
+
+  const quoted = trimmed.match(/["']([^"']+)["']/);
+  const payloadField = trimmed.match(/\bpayload\s*:\s*["']?([^"'\n]+)["']?/i);
+  const sendMatch = trimmed.match(/^\s*send\s+(.+?)\s+from\s+/i);
+  const payload =
+    quoted?.[1] ?? payloadField?.[1]?.trim() ?? sendMatch?.[1]?.trim() ?? null;
+  result.payload = payload && payload.length > 0 ? payload : null;
+
+  return result;
+}
+
 /** Parse baseline planet path from Co-Pilot explanation text. */
 export function parseBaselinePathFromExplanation(explanation: string): string[] | null {
   const match = explanation.match(/Baseline physics path was ([^.]+)\./);

@@ -67,24 +67,34 @@ open `challenge/INTELLIGENCE_REPORT.md`.
 ## 3. Live NL Route — (4:30–6:30)
 
 **Do:** In the **Co-Pilot Natural Language** box type:
-`Send Hello world from Aegis to Caelum`. Click **Route with Co-Pilot**.
+`Send Hello world from Aegis to Caelum`.
+
+**Before clicking route**, point at the **Parsed intent (preview)** chip — it should
+already show `Aegis → Caelum` and `payload: "Hello world"` as you type.
+
+Click **Route with Co-Pilot**. Then click **Initiate Void Beam** — when a routing
+report is present, transmission follows the Co-Pilot `chosen_path` (not just the
+physics baseline).
 
 **Say:**
 
-> "The hybrid parser extracts origin, destination, and payload. The agent pulls
-> live link state, evaluates each hop sequentially with all three models, and
-> emits the Council schema — chosen path, per-link evaluations, a final latency
-> estimate, and a plain-English explanation."
+> "The hybrid parser extracts origin, destination, and payload — you see the
+> structured intent **before** we route. The agent pulls live link state, evaluates
+> each hop sequentially with all three models, and emits the Council schema — chosen
+> path, per-link evaluations, a final latency estimate, and a plain-English
+> explanation. When we beam the packet, it travels the Co-Pilot path so the hop_log
+> proves intelligent routing end-to-end."
 
 **Show:**
 
-- **Parsed intent** chip (Aegis → Caelum).
+- **Parsed intent** chip (preview before route; confirmed after).
 - **Map overlays**: links coloured by trust (red→green), dashed = blocked,
   pulsing = high targeting risk.
 - **Baseline vs Co-Pilot** path toggle on the map.
 - **Link Evaluations** table — click a row to expand the **decision audit**
   breakdown.
 - **Co-Pilot Explanation** text.
+- **Codex Terminal** after **Initiate Void Beam** — hop_log matches the chosen path.
 
 ---
 
@@ -100,7 +110,8 @@ or sever the busiest link) to force a saturation mid-session.
 > its sequential evaluation. When a link on the chosen path saturates, it blocks
 > that hop and reroutes — and the dashboard animates the path change without a
 > reload. We surface a **pivot banner** showing the old path giving way to the
-> new one. Zero packet loss: the new path is chosen before the next send."
+> new one. Zero packet loss: the new path is chosen before the next send — and
+> **Initiate Void Beam** will follow the updated Co-Pilot path automatically."
 
 **Show:** The `pivot-notice` banner and the map path animating to the detour.
 
@@ -140,9 +151,10 @@ breakdown. Keep `challenge/DECISION_AUDIT.md` handy.
 
 ## Fallbacks if something breaks
 
-| Problem               | Fallback                                                        |
-| --------------------- | --------------------------------------------------------------- |
-| Chimera `/state` down | Co-Pilot falls back to neutral link state; explanation notes it |
-| LLM/Ollama offline    | Rules parser handles the scripted utterances                    |
-| Live monitor noisy    | Toggle it off and route manually to show the pivot              |
-| Rate limited (429)    | Wait a moment; limit is 120 req/min per client                  |
+| Problem                        | Fallback                                                                      |
+| ------------------------------ | ----------------------------------------------------------------------------- |
+| Chimera `/state` down          | Co-Pilot falls back to neutral link state; explanation notes it               |
+| LLM/Ollama offline             | Rules parser handles the scripted utterances                                  |
+| Live monitor noisy             | Toggle it off and route manually to show the pivot                            |
+| Rate limited (429)             | Wait a moment; limit is 120 req/min per client                                |
+| Co-Pilot path severed manually | Transmit falls back to physics baseline; `transmitted_on_copilot_path: false` |

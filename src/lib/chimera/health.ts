@@ -43,7 +43,19 @@ export async function probeChimeraReachable(): Promise<boolean> {
 
 /** Collect Chimera-related health fields for the API health endpoint. */
 export async function getChimeraHealthSnapshot(): Promise<ChimeraHealthSnapshot> {
-  const [chimera_reachable] = await Promise.all([probeChimeraReachable()]);
+  const chimera_reachable = await probeChimeraReachable();
+
+  // Best-effort live-tick refresh so /api/health reports a real tick even
+  // before any routing request has run. Requires the team key; silently keeps
+  // the last known tick (or null) when unavailable or offline.
+  if (chimera_reachable) {
+    try {
+      await chimeraClient.getState();
+    } catch {
+      // No team key configured or Chimera offline: fall back to last tick.
+    }
+  }
+
   return {
     models_loaded: areModelsLoaded(),
     chimera_reachable,

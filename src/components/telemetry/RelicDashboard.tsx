@@ -13,7 +13,10 @@ import CodexTerminal from "./CodexTerminal";
 import LatencyMetrics from "./LatencyMetrics";
 import LinkEvaluationsPanel from "./LinkEvaluationsPanel";
 import IntelligenceSummary from "./IntelligenceSummary";
-import { parseBaselinePathFromExplanation } from "./chimera-ui-utils";
+import {
+  parseBaselinePathFromExplanation,
+  previewParseIntent,
+} from "./chimera-ui-utils";
 
 interface UniverseResponse {
   metadata: UniverseMetadata;
@@ -60,6 +63,12 @@ export default function RelicDashboard({ appVersion }: RelicDashboardProps) {
         ? parseBaselinePathFromExplanation(routingReport.explanation)
         : null,
     [routingReport],
+  );
+
+  // Live, client-side preview of the parsed intent shown BEFORE routing.
+  const previewIntent = useMemo(
+    () => previewParseIntent(nlRequest, universe?.nodes.map((n) => n.id) ?? []),
+    [nlRequest, universe],
   );
 
   // Load universe config
@@ -234,6 +243,15 @@ export default function RelicDashboard({ appVersion }: RelicDashboardProps) {
         setRoutingReport(data);
         setOrigin(data.origin_id);
         setDestination(data.destination_id);
+        // Carry the parsed payload into the beam so a Co-Pilot route transmits
+        // the actual requested message (the report schema omits payload).
+        if (!isRefresh) {
+          const parsed = previewParseIntent(
+            trimmed,
+            universe?.nodes.map((n) => n.id) ?? [],
+          );
+          if (parsed.payload) setPayload(parsed.payload);
+        }
         if (isRefresh) {
           setRoutingError(null);
         }
@@ -252,7 +270,7 @@ export default function RelicDashboard({ appVersion }: RelicDashboardProps) {
         }
       }
     },
-    [nlRequest],
+    [nlRequest, universe],
   );
 
   // Live chaos pivot: re-poll the Co-Pilot on an interval and surface path changes.
@@ -521,15 +539,36 @@ export default function RelicDashboard({ appVersion }: RelicDashboardProps) {
                     placeholder='e.g. "Send status ping from Boreas to Fenix"'
                   />
                 </div>
-                {routingReport && (
+                {(routingReport ||
+                  previewIntent.origin ||
+                  previewIntent.destination ||
+                  previewIntent.payload) && (
                   <div
                     data-testid="parsed-intent"
                     className="rounded-lg border border-cyan-500/20 bg-cyan-950/20 px-3 py-2 text-[11px] font-mono text-cyan-100/90"
                   >
                     <span className="text-cyan-500/70 uppercase text-[9px] font-bold tracking-wider block mb-1">
-                      Parsed intent
+                      {routingReport ? "Parsed intent" : "Parsed intent (preview)"}
                     </span>
-                    {routingReport.origin_id} → {routingReport.destination_id}
+                    <div>
+                      <span className="text-cyan-400">
+                        {routingReport?.origin_id ?? previewIntent.origin ?? "?"}
+                      </span>
+                      {" → "}
+                      <span className="text-cyan-400">
+                        {routingReport?.destination_id ??
+                          previewIntent.destination ??
+                          "?"}
+                      </span>
+                    </div>
+                    {previewIntent.payload && (
+                      <div className="mt-0.5 text-cyan-100/70">
+                        payload:{" "}
+                        <span className="text-cyan-200">
+                          &quot;{previewIntent.payload}&quot;
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
                 <button

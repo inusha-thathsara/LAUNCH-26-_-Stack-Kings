@@ -27,6 +27,7 @@ npm run dev
 - Tests: `npm test`
 - Coverage: `npm run test:coverage`
 - E2E smoke (Playwright): `npx playwright install chromium && npm run test:e2e`
+- Model training (Phase 2): `npm run train:models` · `npm run evaluate:models`
 - Production build: `npm run build && npm start`
 
 ### Run with Docker
@@ -74,9 +75,13 @@ npm run relic -- send Aegis Caelum "Hello world" --kill Dawn --cut Aegis-Boreas
 
 ### HTTP API
 
-- `GET /api/health` — liveness probe (version, config path/hash, engine status).
+- `GET /api/health` — liveness probe (version, config path/hash, engine status, plus
+  Chimera `models_loaded` / `chimera_reachable` / `last_tick`).
 - `GET /api/universe` — **M1**: metadata, nodes, adjacency, and the within-Lmax edges (cached 1 h).
-- `POST /api/transmit` — **M2/M3/M4** (payload capped at 10 KB; structured error codes):
+- `POST /api/transmit` — **M2/M3/M4** (payload capped at 10 KB; structured error codes).
+  Optional `"use_copilot": true` attaches a Co-Pilot routing report and transmits
+  along the Co-Pilot `chosen_path` when deliverable.
+- `POST /api/route` — **Phase 2**: natural-language Co-Pilot routing (see below).
 
 ```bash
 curl http://localhost:3000/api/health
@@ -84,6 +89,10 @@ curl http://localhost:3000/api/health
 curl -X POST http://localhost:3000/api/transmit \
   -H "Content-Type: application/json" \
   -d '{"origin":"Aegis","destination":"Caelum","payload":"Hello world","blockedNodes":["Dawn"]}'
+
+curl -X POST http://localhost:3000/api/route \
+  -H "Content-Type: application/json" \
+  -d '{"request":"Send \"status ping\" from Aegis to Caelum"}'
 ```
 
 Returns the `packet` (with `hop_log`), the `route` (path + latency breakdown), and
@@ -91,6 +100,54 @@ the reconstructed `delivered_payload`. API routes are rate-limited (120 req/min 
 
 **Config override:** set `UNIVERSE_CONFIG_PATH` to point at an alternate
 `universe-config.json` before starting the server or container.
+
+---
+
+## Phase 2 — Chimera Co-Pilot
+
+The Co-Pilot turns a plain-English request into an intelligent, risk-aware route
+over the live **Chimera** telemetry stream. It layers three analytical models
+(congestion, trust, targeting) into a single **True Cost** and routes to minimise
+it, then emits a mandatory `Phase2RoutingReport` explaining every decision.
+
+```bash
+curl -X POST http://localhost:3000/api/route \
+  -H "Content-Type: application/json" \
+  -d '{"request":"Send \"status ping\" from Aegis to Caelum"}'
+```
+
+- **Hybrid NL parser** — a fast rules layer (from/to, arrow, fuzzy planet matching,
+  quoted/`send …` payload) with an optional LLM fallback (`CHIMERA_LLM_PROVIDER=ollama|gemini`);
+  offline-deterministic by default. See [`src/lib/chimera/parser/`](src/lib/chimera/parser).
+- **True Cost router** — combines predicted congestion penalty, trust, and targeting
+  risk per link; steers around jammed/compromised/out-of-distribution links.
+  See [`src/lib/chimera/router/true-cost-router.ts`](src/lib/chimera/router/true-cost-router.ts).
+- **Anomaly handling** — `detectLinkAnomaly` sanitises out-of-distribution telemetry
+  and applies conservative scores so the report always validates and the router
+  avoids unfamiliar links. See [`challenge/DECISION_AUDIT.md`](challenge/DECISION_AUDIT.md).
+- **Transmit integration** — `POST /api/transmit` with `"use_copilot": true` returns the
+  `routing_report` **and** transmits the packet along the Co-Pilot's `chosen_path`
+  (`transmitted_on_copilot_path: true`), falling back to the physics baseline if that
+  path is severed.
+- **Dashboard** — the `/relic` Co-Pilot panel shows the parsed intent (live preview
+  before routing), the chosen vs. baseline path overlay, per-link evaluations, and a
+  **Live Chaos Monitor** that re-polls and animates path pivots. Demo flow:
+  [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md).
+
+### Model findings (Intelligence Walkthrough)
+
+Trained on CSVs only (`challenge p2/` datasets — never on scrambled live `/state`).
+Regenerate with `npm run train:models` and `npm run evaluate:models`. Full metrics
+in [`challenge/INTELLIGENCE_REPORT.md`](challenge/INTELLIGENCE_REPORT.md); surfaced
+in the dashboard **Intelligence Walkthrough** panel.
+
+| Model          | Key finding                                                                                        |
+| -------------- | -------------------------------------------------------------------------------------------------- |
+| **Congestion** | Per-link power-law `penalty_ms = k · load_ratio^p`; global MAE ~22.7 s on held-out ticks           |
+| **Trust**      | Two links systematically under-report latency: **Aegis-Elysium**, **Boreas-Fenix** (92% precision) |
+| **Targeting**  | Higher `traffic_share` → higher jam probability; route diversification avoids predictable paths    |
+
+Decision-audit formulas (plain English): [`challenge/DECISION_AUDIT.md`](challenge/DECISION_AUDIT.md).
 
 ---
 
@@ -119,8 +176,13 @@ demo surface: an interactive `SpaceMap` (click planets to set origin/destination
 click planets/links to fail them), latency gauges (M3), and a Codex Terminal that
 shows the per-hop local dialect, the next-hop conversion, and the binary stream
 (M2). One-click scenario presets (Baseline, Hyper-Flare, Distortion, Blackout,
-Chaos) inject failures for the M4 resilience demo; their targets are derived from
-the loaded universe, not hardcoded.
+Chaos) inject failures for the M4 resilience demo.
+
+**Phase 2 Co-Pilot panel:** natural-language routing request, live parsed-intent
+preview (origin → destination + payload), link evaluations table with expandable
+decision-audit rows, intelligence walkthrough summary, chosen vs. baseline path
+toggle on the map, live chaos monitor with pivot banner, and **Initiate Void Beam**
+which transmits along the Co-Pilot path when a routing report is present.
 
 ### Latency model
 
@@ -193,18 +255,22 @@ Modeling assumptions (consistent with the challenge's simplifications):
 ```
 src/
   lib/relic/          # engine (routing, latency, codec, transmission, resilience)
+  lib/chimera/        # Phase 2: client, models, parser, agent, true-cost router
   lib/api/            # validation, logging, rate limiting, route handler
-  components/telemetry/  # SpaceMap, LatencyMetrics, CodexTerminal, RelicDashboard
+  components/telemetry/  # SpaceMap, RelicDashboard, LinkEvaluationsPanel, …
   app/
     relic/page.tsx    # telemetry dashboard mount
-    api/              # health, universe, transmit, debug/sentry
+    api/              # health, universe, transmit, route, debug/sentry
   cli/relic.ts        # terminal demo (M1-M4)
-e2e/                  # Playwright smoke tests
+challenge/
+  INTELLIGENCE_REPORT.md   # model evaluation findings (Intelligence Walkthrough)
+  DECISION_AUDIT.md        # score-field cheat sheet (Decision Audit trial)
+e2e/                  # Playwright smoke tests (7 specs incl. Co-Pilot flows)
 .github/workflows/    # CI (lint, test, coverage, E2E, Docker) + deploy
-universe-config.json  # the Zeta-26 universe (parsed dynamically)
+challenge p2/universe-config.json  # Phase 2 extended config (12 links, default)
 ```
 
-Reference docs: [`Equations.md`](Equations.md) · [`Launch26.md`](Launch26.md) · [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md)
+Reference docs: [`Equations.md`](Equations.md) · [`Launch26.md`](Launch26.md) · [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md) · [`challenge/DECISION_AUDIT.md`](challenge/DECISION_AUDIT.md)
 
 ---
 
@@ -216,6 +282,10 @@ Reference docs: [`Equations.md`](Equations.md) · [`Launch26.md`](Launch26.md) �
 | M2 — Multi-hop proof (dialect translations)          | `/relic` Codex Terminal (local + next-hop dialect + binary stream), or `npm run relic` |
 | M3 — Latency breakdown (fiber/tower/atmosphere/void) | `/relic` latency gauges, or CLI output                                                 |
 | M4 — Chaos test (kill node/link, reroute)            | `/relic` scenario presets / click a planet or link, or `npm run relic`                 |
+| P2 — Intelligence Walkthrough                        | `/relic` Intelligence Summary panel, or `challenge/INTELLIGENCE_REPORT.md`             |
+| P2 — Live NL route + Co-Pilot report                 | `/relic` Co-Pilot panel → **Route with Co-Pilot**, or `POST /api/route`                |
+| P2 — Chaos severance pivot                           | `/relic` **Live Chaos Monitor** + scenario presets                                     |
+| P2 — Decision audit                                  | `/relic` Link Evaluations table (click row), or `challenge/DECISION_AUDIT.md`          |
 
 ---
 
@@ -259,7 +329,9 @@ Pushes to `inusha-dev` do **not** auto-merge into `main`.
 1. Import the GitHub repo in [Vercel](https://vercel.com).
 2. Framework is auto-detected (Next.js). `vercel.json` is included.
 3. Copy [`.env.example`](.env.example) variables into the Vercel project settings as needed
-   (`SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `NEXT_PUBLIC_SITE_URL`, etc.).
+   (`CHIMERA_TEAM_KEY`, `CHIMERA_API_BASE_URL`, `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`,
+   `NEXT_PUBLIC_SITE_URL`, etc.). **`CHIMERA_TEAM_KEY` is required** for live Co-Pilot
+   routing in production (server-side only — never expose to the browser).
 4. Deploy — `/relic` is the demo surface; `/api/health` is the liveness probe.
 5. **Custom domain (optional):** add a subdomain (e.g. `relic.yourdomain.com`) in Vercel
    **Settings → Domains**, then create the CNAME + TXT records your DNS provider shows.
@@ -282,8 +354,9 @@ curl http://localhost:3000/api/health
 
 - **Structured API logs:** every `/api/*` request emits a single-line JSON log
   (`route`, `method`, `status`, `duration_ms`) via [`src/lib/api/logging.ts`](src/lib/api/logging.ts).
-- **Health probe:** `GET /api/health` returns `version`, `config_path`, `config_hash`, and
-  `engine_loaded` for deploy verification.
+- **Health probe:** `GET /api/health` returns `version`, `config_path`, `config_hash`,
+  `engine_loaded`, and Chimera fields (`models_loaded`, `chimera_reachable`, `last_tick`)
+  for deploy verification.
 - **Sentry (optional):** set `SENTRY_DSN` (server) and `NEXT_PUBLIC_SENTRY_DSN` (browser).
   When unset, Sentry is fully disabled — no account required for local dev.
 - **Error boundaries:** `global-error.tsx` and the dashboard error boundary capture UI failures.
@@ -296,9 +369,10 @@ Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind CSS · Vitest ·
 
 ## Quality & testing
 
-- **Unit tests:** Vitest (`src/**/*.test.ts`) — engine, API helpers, validation
-- **API integration:** `src/app/api/api.integration.test.ts` — health, universe, transmit edge cases
-- **E2E smoke:** Playwright (`e2e/relic.spec.ts`) — dashboard load, chaos scenario, manual transmit
+- **Unit tests:** Vitest (`src/**/*.test.ts`) — engine, Chimera models/agent/router, API helpers
+- **API integration:** `src/app/api/api.integration.test.ts` — health, universe, transmit, `/api/route`
+- **E2E smoke:** Playwright (`e2e/relic.spec.ts`, 7 tests) — dashboard load, chaos scenario, Co-Pilot route, live monitor pivot
+- **Model training/eval:** `npm run train:models` · `npm run evaluate:models` → `challenge/INTELLIGENCE_REPORT.md`
 - **CI:** GitHub Actions runs lint, typecheck, coverage, build, Docker, and E2E on `main`
 - **Pre-commit:** husky + lint-staged (Prettier + ESLint on staged files)
 

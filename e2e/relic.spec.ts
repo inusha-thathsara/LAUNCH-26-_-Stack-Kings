@@ -177,4 +177,38 @@ test.describe("Relic telemetry dashboard", () => {
       /live monitor on/i,
     );
   });
+
+  test("live monitor surfaces a pivot banner when the path changes", async ({
+    page,
+  }) => {
+    let calls = 0;
+    await page.route("**/api/route", async (route) => {
+      calls += 1;
+      // First response: original path; subsequent live polls: pivoted path.
+      const body =
+        calls <= 1
+          ? MOCK_ROUTING_REPORT
+          : { ...MOCK_ROUTING_REPORT, chosen_path: ["Aegis", "Dawn", "Caelum"] };
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(body),
+      });
+    });
+
+    await page.goto("/relic");
+
+    await expect(
+      page.getByRole("heading", { name: /Zeta-26 Telemetry Console/i }),
+    ).toBeVisible({ timeout: 15_000 });
+
+    await page.getByTestId("copilot-route-button").click();
+    await expect(page.getByTestId("copilot-explanation")).toBeVisible();
+
+    await page.getByTestId("live-monitor-toggle").click();
+
+    // The 4s poll picks up the pivoted path and animates the banner.
+    await expect(page.getByTestId("pivot-notice")).toBeVisible({ timeout: 12_000 });
+    await expect(page.getByTestId("pivot-notice")).toContainText(/pivoted/i);
+  });
 });
